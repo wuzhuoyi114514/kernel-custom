@@ -14,6 +14,9 @@
 #define GDT_TSS         0x28  // TSS 的选择子
 #define SHELL_BUF_SIZE 256
 #define MAX_HISTORY 30  // 最多保存 30 条历史记录
+#define USER_PROGRAM_BASE 0x800000
+#define USER_PROGRAM_MAX_SIZE (1024 * 1024)  // 最多 1MB
+
 static char g_history[MAX_HISTORY][SHELL_BUF_SIZE]; // 现在这里绝对合法了！
 static int g_history_count = 0;
 static int g_history_idx = -1;
@@ -454,6 +457,100 @@ void run_user_program_at(uint32_t entry_point) {
   asm_switch_to_user(entry_point, user_stack_top);
 }
 
+// ============ 【新增】用户程序运行函数 ============
+// 从文件系统中加载并执行用户程序
+bool run_user_program_from_file(const char *filepath) {
+  vga_puts("[DEBUG] Attempting to load: ");
+  vga_puts(filepath);
+  vga_puts("\n");
+
+  // 1. 解析路径获取 inode
+  uint32_t inode_num = resolve_path(filepath);
+  
+  if (inode_num == 0) {
+    vga_set_color(COLOR_WHITE, COLOR_RED);
+    vga_puts("Error: File not found - ");
+    vga_puts(filepath);
+    vga_puts("\n");
+    vga_reset_color();
+    return false;
+  }
+
+  // 2. 读取 inode 元数据，验证是否为常规文件
+  struct ext2_inode file_inode;
+  read_inode(inode_num, g_sb, fs_gdt, &file_inode);
+
+  uint16_t file_type = file_inode.i_mode & 0xF000;
+  if (file_type == 0x4000) {
+    // 0x4000 是目录类型
+    vga_set_color(COLOR_WHITE, COLOR_RED);
+    vga_puts("Error: ");
+    vga_puts(filepath);
+    vga_puts(" is a directory, not an executable\n");
+    vga_reset_color();
+    return false;
+  }
+
+  if (file_type != 0x8000) {
+    // 0x8000 是常规文件类型
+    vga_set_color(COLOR_WHITE, COLOR_RED);
+    vga_puts("Error: Invalid file type (mode=0x");
+    print_hex(file_inode.i_mode);
+    vga_puts(")\n");
+    vga_reset_color();
+    return false;
+  }
+
+  // 3. 检查文件大小
+  uint32_t file_size = file_inode.i_size;
+  vga_puts("[DEBUG] File size: ");
+  print_hex(file_size);
+  vga_puts(" bytes\n");
+
+  if (file_size == 0) {
+    vga_set_color(COLOR_WHITE, COLOR_RED);
+    vga_puts("Error: File is empty\n");
+    vga_reset_color();
+    return false;
+  }
+
+  if (file_size > USER_PROGRAM_MAX_SIZE) {
+    vga_set_color(COLOR_WHITE, COLOR_RED);
+    vga_puts("Error: File too large (max ");
+    print_hex(USER_PROGRAM_MAX_SIZE);
+    vga_puts(" bytes)\n");
+    vga_reset_color();
+    return false;
+  }
+
+  // 4. 加载文件到用户空间
+  vga_puts("[DEBUG] Loading to 0x");
+  print_hex(USER_PROGRAM_BASE);
+  vga_puts("...\n");
+
+  if (!load_file_to_memory(inode_num, (uint8_t *)USER_PROGRAM_BASE)) {
+    vga_set_color(COLOR_WHITE, COLOR_RED);
+    vga_puts("Error: Failed to load file into memory\n");
+    vga_reset_color();
+    return false;
+  }
+
+  // 5. 执行用户程序
+  vga_set_color(COLOR_GREEN, COLOR_BLACK);
+  vga_puts("[INFO] Launching user program at 0x");
+  print_hex(USER_PROGRAM_BASE);
+  vga_puts("\n");
+  vga_reset_color();
+
+  run_user_program_at(USER_PROGRAM_BASE);
+  
+  // 用户程序执行完后回到这里（如果采用了 call 而非 jmp）
+  vga_set_color(COLOR_YELLOW, COLOR_BLACK);
+  vga_puts("[INFO] User program returned\n");
+  vga_reset_color();
+  
+  return true;
+}
 
 static uint8_t user_code_test[] = { 0xB0, 'A', 0xB4, 0x0E, 0xEB, 0xFC };
 extern void ext2_cat(const char *filename);
@@ -461,10 +558,15 @@ extern void ext2_cat(const char *filename);
 void handle_command(char *cmd)
 {
   if (strcmp(cmd, "help") == 0) {
-    vga_puts("commands: help, ls, clear, cd\n");
-    vga_puts("test ring3 by test_ring3\n");
+    vga_puts("commands: help, ls, clear, cd, ./program\n");
+    vga_puts("  - help            Show this help message\n");
+    vga_puts("  - ls [path]       List directory contents\n");
+    vga_puts("  - cd <path>       Change directory\n");
+    vga_puts("  - clear           Clear screen\n");
+    vga_puts("  - ./program       Execute program from current directory\n");
+    vga_puts("  - /path/program   Execute program from absolute path\n");
   }
-  if (strcmp(cmd, "test_ring3") == 0) {
+  else if (strcmp(cmd, "test_ring3") == 0) {
     vga_puts("Switching to Ring 3...\n");
 
     // 静态数组存放硬编码机器码
@@ -515,7 +617,7 @@ void handle_command(char *cmd)
     if (target_inode != 0) {
       // 【关键】检查目标 Inode 是否确实是一个目录
       struct ext2_inode inode_data;
-      read_inode(target_inode, g_sb, fs_gdt, &inode_data);  // ✅ 修复：加入 g_sb
+      read_inode(target_inode, g_sb, fs_gdt, &inode_data);
 
       if ((inode_data.i_mode & 0xF000) == 0x4000) {
         ext2_ls(target_inode);
@@ -534,33 +636,16 @@ void handle_command(char *cmd)
   else if (cmd[0] == 0) {
     return;
   }
+  // ============ 【新增】用户程序执行处理 ============
   else if (cmd[0] == '/' || strncmp(cmd, "./", 2) == 0) {
-    // 1. 解析路径得到 Inode
-    uint32_t inode_num = resolve_path(cmd);
-    
-    if (inode_num != 0) {
-        // 2. 加载文件内容到内存地址 (例如：0x800000)
-        // 你需要写一个函数，把文件读到指定内存区
-        //
-        char *path = cmd + 2;
-        if (load_file_to_memory(inode_num, (uint8_t *)0x800000)) {
-            vga_puts("Launching: "); vga_puts(cmd); vga_puts("\n");
-                if (path[0] == '\0') {
-        vga_puts("Usage: ./<filename>\n");
-        return;
-    }            
-            
-            run_user_program_at(0x800000);
-        } else {
-            vga_puts("Failed to load executable.\n");
-        }
-    } else {
-        vga_puts("Command not found.\n");
-    }
-}
+    // 绝对路径或相对路径执行程序
+    run_user_program_from_file(cmd);
+  }
   else {
     vga_set_color(COLOR_WHITE, COLOR_RED);
-    vga_puts("unknown command\n");
+    vga_puts("unknown command: ");
+    vga_puts(cmd);
+    vga_puts("\n");
     vga_reset_color();
   }
 }
