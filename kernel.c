@@ -25,6 +25,7 @@ extern uint32_t ext2_start_lba;
 uint32_t g_cwd_inode = 2;
 extern void ext2_cd(const char *path); 
 struct ext2_group_desc *fs_gdt = 0;
+struct ext2_superblock *g_sb = 0;  // 全局 superblock 指针
 extern void ext2_ls(uint32_t dir_inode_num);
 //extern void ext2_ls(uint32_t dir_inode_num);
 extern bool load_file_to_memory(uint32_t inode_num, uint8_t *dest_addr);
@@ -514,7 +515,7 @@ void handle_command(char *cmd)
     if (target_inode != 0) {
       // 【关键】检查目标 Inode 是否确实是一个目录
       struct ext2_inode inode_data;
-      read_inode(target_inode, fs_gdt, &inode_data);
+      read_inode(target_inode, g_sb, fs_gdt, &inode_data);  // ✅ 修复：加入 g_sb
 
       if ((inode_data.i_mode & 0xF000) == 0x4000) {
         ext2_ls(target_inode);
@@ -623,6 +624,7 @@ void kmain(void) {
 
     // 3. 打印出完整的 GDT 区域，观察是否存在魔数或有效特征
     fs_gdt = (struct ext2_group_desc *)gdt_buffer; 
+    g_sb = sb;  // ✅ 保存全局 superblock 指针
     // ====== 终极抓贼打印 A ======
     serial_puts("\n[AM_INIT] Pointer Variable Address (&fs_gdt) = "); 
     print_hex((uint32_t)&fs_gdt);
@@ -644,7 +646,7 @@ void kmain(void) {
 
     // 4. 读取根目录 Inode
     struct ext2_inode root_inode;
-    read_inode(2, fs_gdt, &root_inode);
+    read_inode(2, sb, fs_gdt, &root_inode);  // ✅ 修复：正确的参数顺序 (inode_num, superblock, gdt, out)
 
     // 5. 严谨的目录类型判定
     if ((root_inode.i_mode & 0xF000) == 0x4000) {
