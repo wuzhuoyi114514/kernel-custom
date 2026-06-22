@@ -1,0 +1,60 @@
+#include <stdint.h>
+#include <stddef.h>
+#include "include/ext2.h" // 确保包含你定义的结构体
+
+// --- 外部声明 ---
+extern void serial_init();
+extern void serial_puts(const char *s);
+extern void disk_read(uint32_t lba, uint8_t *buffer, uint32_t sector_count); // 声明磁盘读取函数
+extern void fs_init(struct ext2_superblock *sb);
+extern void read_fs_block(uint32_t block_id, uint8_t *buffer);
+extern void serial_puts(const char *s);
+
+// --- 简单的显示驱动 ---
+void clear_screen() {
+    uint16_t *vga_buffer = (uint16_t*)0xB8000;
+    for (int i = 0; i < 25 * 80; i++) {
+        vga_buffer[i] = 0x0720;
+    }
+}
+
+// --- 内核主入口 ---
+void kmain(void) {
+    serial_init();
+    clear_screen();
+
+    serial_puts("--- Kernel Booting ---\n");
+    serial_puts("Serial Port: OK\n");
+    
+    // 1. 定义读取缓冲区
+    uint8_t buffer[1024];
+    
+    // 2. 读取 Ext2 超级块
+    // Ext2 超级块位于 1024 字节偏移处，即第 2 个扇区 (LBA 2)
+    serial_puts("Reading Ext2 Superblock...\n");
+    disk_read(2, buffer, 2);
+    struct ext2_superblock *sb = (struct ext2_superblock *)buffer;
+
+    // 2. 验证并初始化文件系统驱动
+    if (sb->s_magic == 0xEF53) {
+        serial_puts("Ext2 detected, initializing FS layer...\n");
+        fs_init(sb); // 计算 block_size 并初始化
+        
+        // 3. 读取组描述符表 (Group Descriptor Table)
+        // GDT 通常紧跟在超级块块后面
+        uint8_t gd_buffer[1024];
+        read_fs_block(sb->s_first_data_block + 1, gd_buffer);
+        // 关键修正：声明并赋值 gdt 指针
+    struct ext2_group_desc *gdt = (struct ext2_group_desc *)gd_buffer;
+        // 3. 定位 Inode 表
+uint32_t inode_table_block = gdt->bg_inode_table 
+serial_puts("Inode table block found.\n");
+        // 现在你可以从 inode_table_block 开始读取 Inode 了
+        serial_puts("Group Descriptor Table read successfully.\n");
+    } else {
+        serial_puts("Error: Not an Ext2 filesystem.\n");
+    }
+
+    // 5. 循环
+    while (1) { }
+}

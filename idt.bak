@@ -1,0 +1,170 @@
+#include <stdint.h>
+
+// ==========================================
+// 1. 宏定义 (Macros)
+// ==========================================
+#define PIC1          0x20
+#define PIC2          0xA0
+#define PIC1_COMMAND  PIC1
+#define PIC1_DATA     (PIC1+1)
+#define PIC2_COMMAND  PIC2
+#define PIC2_DATA     (PIC2+1)
+
+#define ICW1_INIT     0x10
+#define ICW1_ICW4     0x01
+#define ICW4_8086     0x01
+
+// ==========================================
+// 2. 结构体定义 (Structures)
+// ==========================================
+struct idt_entry {
+  uint16_t base_low;   // 中断处理函数地址低 16 位
+  uint16_t selector;   // 目标代码段选择子
+  uint8_t  always0;    // 恒为 0
+  uint8_t  flags;      // 属性标志 (如 DPL, Present 等)
+  uint16_t base_high;  // 中断处理函数地址高 16 位
+} __attribute__((packed));
+
+struct idt_ptr {
+  uint16_t limit;      // IDT 大小 - 1
+  uint32_t base;       // IDT 基地址
+} __attribute__((packed));
+
+// 全局 IDT 表和指针
+struct idt_entry idt[256];
+struct idt_ptr idt_ptr;
+
+// 外部汇编键盘中断入口
+extern void keyboard_handler_asm(void); 
+
+// ==========================================
+// 3. 内联 I/O 函数 (Inline I/O Functions)
+// ==========================================
+static inline void outb(uint16_t port, uint8_t val) {
+  __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+
+static inline uint8_t inb(uint16_t port) {
+  uint8_t ret;
+  __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+  return ret;
+}
+
+// ==========================================
+// 4. 辅助函数 (Helper Functions)
+// ==========================================
+void *memset(void *dst, int c, uint32_t n) {
+  uint8_t *p = (uint8_t *)dst;
+  for (uint32_t i = 0; i < n; i++)
+    p[i] = (uint8_t)c;
+  return dst;
+}
+
+void pic_remap(int offset1, int offset2) {
+  uint8_t a1, a2;
+
+  // 保存原有的 mask
+  a1 = inb(PIC1_DATA);
+  a2 = inb(PIC2_DATA);
+
+  // 开始初始化 ICW1
+  outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
+  outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
+
+  // 设置矢量偏移量 (ICW2)
+  outb(PIC1_DATA, offset1); 
+  outb(PIC2_DATA, offset2); 
+
+  // 设置主从片级联 (ICW3)
+  outb(PIC1_DATA, 4); // 告诉主片：从片连接在 IRQ2
+  outb(PIC2_DATA, 2); // 告诉从片：它的级联号是 2
+
+  // 设置环境模式为 8086 模式 (ICW4)
+  outb(PIC1_DATA, ICW4_8086);
+  outb(PIC2_DATA, ICW4_8086);
+
+  // 恢复原有的 mask
+  outb(PIC1_DATA, a1);
+  outb(PIC2_DATA, a2);
+}
+
+void idt_set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags) {
+  idt[num].base_low = (base & 0xFFFF);
+  idt[num].selector = sel;
+  idt[num].always0 = 0;
+  idt[num].flags = flags;
+  idt[num].base_high = (base >> 16) & 0xFFFF;
+}
+
+static inline void lidt(struct idt_ptr *idtp) {
+  __asm__ volatile ("lidt (%0)" : : "r"(idtp));
+}
+#define PIC1_CMD  0x20
+#define PIC1_DATA 0x21
+#define PIC2_CMD  0xA0
+#define PIC2_DATA 0xA1
+
+// 简单的 I/O 延迟函数，防止老旧硬件反应不及（在 QEMU 模拟中建议保留）
+static inline void io_delay(void) {
+  asm volatile ("jmp 1f\n1: jmp 1f\n1:");
+}
+
+void pic_init(void) {
+  // 1. 开始初始化流程（ICW1）
+  outb(PIC1_CMD, 0x11); // 初始化命令，后续需要发送 ICW4
+  io_delay();
+  outb(PIC2_CMD, 0x11);
+  io_delay();
+
+  // 2. 设置中断向量偏移量（ICW2）
+  outb(PIC1_DATA, 0x20); // 主 PIC (IRQ0-7) 映射到 0x20 - 0x27 (即十进制 32 - 39)
+  io_delay();
+  outb(PIC2_DATA, 0x28); // 从 PIC (IRQ8-15) 映射到 0x28 - 0x2F (即十进制 40 - 47)
+  io_delay();
+
+  // 3. 设置主从芯片的级联连线（ICW3）
+  outb(PIC1_DATA, 0x04); // 告知主 PIC：从 PIC 连接在它的 IRQ2 引脚上 (00000100b)
+  io_delay();
+  outb(PIC2_DATA, 0x02); // 告知从 PIC：它的级联身份 ID 是 2
+  io_delay();
+
+  // 4. 设置环境与工作模式（ICW4）
+  outb(PIC1_DATA, 0x01); // 8086/88 模式
+  io_delay();
+  outb(PIC2_DATA, 0x01); // 8086/88 模式
+  io_delay();
+
+  // 5. 设置中断屏蔽字（OCW1）
+  // 0xFC = 11111100b (在 PIC 中，0 表示允许中断，1 表示屏蔽中断)
+  // 此时主 PIC 只放行 IRQ0 (定时器) 和 IRQ1 (键盘) 
+  outb(PIC1_DATA, 0xFC); 
+  outb(PIC2_DATA, 0xFF); // 从 PIC 的所有中断暂时全部屏蔽
+}
+
+// ==========================================
+// 5. 核心初始化函数 (Main Initialization)
+// ==========================================
+void idt_init(void) {
+  // 1. 关中断，防止初始化期间发生混乱
+  __asm__ volatile("cli");
+
+  // 2. 清空 IDT 表
+  memset(idt, 0, sizeof(idt));
+
+  // 3. 重映射 PIC 中断向量号（避开 CPU 内部异常的 0x00-0x1F）
+  pic_init();
+
+  // 4. 设置键盘中断服务程序 (IRQ1 -> 0x20 + 1 = 0x21)
+  idt_set_gate(0x21, (uint32_t)keyboard_handler_asm, 0x08, 0x8E);
+
+  // 5. 加载 IDT
+  idt_ptr.limit = (sizeof(struct idt_entry) * 256) - 1; // 应该等于 2047 (0x7FF)
+  idt_ptr.base = (uint32_t)&idt;
+  __asm__ __volatile__("lidt %0" : : "m"(idt_ptr));
+
+  // 6. 设置 PIC 屏蔽字：仅允许键盘中断 (IRQ1)
+  // 0xFD = 1111 1101b (Bit 1 为 0 表示开启 IRQ1 键盘)
+  outb(0x21, 0xFD); 
+  outb(0xA1, 0xFF); // 屏蔽从片所有中断
+ __asm__ volatile("sti");
+}

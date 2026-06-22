@@ -1,0 +1,641 @@
+# 0 "kernel.c"
+# 0 "<built-in>"
+# 0 "<命令行>"
+# 1 "/usr/include/stdc-predef.h" 1 3
+# 0 "<命令行>" 2
+# 1 "kernel.c"
+# 1 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stdint.h" 1 3
+# 9 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stdint.h" 3
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+# 1 "/usr/include/stdint.h" 1 3
+# 26 "/usr/include/stdint.h" 3
+# 1 "/usr/include/bits/libc-header-start.h" 1 3
+# 33 "/usr/include/bits/libc-header-start.h" 3
+# 1 "/usr/include/features.h" 1 3
+# 431 "/usr/include/features.h" 3
+# 1 "/usr/include/features-time64.h" 1 3
+# 20 "/usr/include/features-time64.h" 3
+# 1 "/usr/include/bits/wordsize.h" 1 3
+# 21 "/usr/include/features-time64.h" 2 3
+# 1 "/usr/include/bits/timesize.h" 1 3
+# 19 "/usr/include/bits/timesize.h" 3
+# 1 "/usr/include/bits/wordsize.h" 1 3
+# 20 "/usr/include/bits/timesize.h" 2 3
+# 22 "/usr/include/features-time64.h" 2 3
+# 432 "/usr/include/features.h" 2 3
+# 540 "/usr/include/features.h" 3
+# 1 "/usr/include/sys/cdefs.h" 1 3
+# 730 "/usr/include/sys/cdefs.h" 3
+# 1 "/usr/include/bits/wordsize.h" 1 3
+# 731 "/usr/include/sys/cdefs.h" 2 3
+# 1 "/usr/include/bits/long-double.h" 1 3
+# 732 "/usr/include/sys/cdefs.h" 2 3
+# 541 "/usr/include/features.h" 2 3
+# 564 "/usr/include/features.h" 3
+# 1 "/usr/include/gnu/stubs.h" 1 3
+
+
+
+
+
+
+# 1 "/usr/include/gnu/stubs-32.h" 1 3
+# 8 "/usr/include/gnu/stubs.h" 2 3
+# 565 "/usr/include/features.h" 2 3
+# 34 "/usr/include/bits/libc-header-start.h" 2 3
+# 27 "/usr/include/stdint.h" 2 3
+# 1 "/usr/include/bits/types.h" 1 3
+# 27 "/usr/include/bits/types.h" 3
+# 1 "/usr/include/bits/wordsize.h" 1 3
+# 28 "/usr/include/bits/types.h" 2 3
+# 1 "/usr/include/bits/timesize.h" 1 3
+# 19 "/usr/include/bits/timesize.h" 3
+# 1 "/usr/include/bits/wordsize.h" 1 3
+# 20 "/usr/include/bits/timesize.h" 2 3
+# 29 "/usr/include/bits/types.h" 2 3
+
+
+typedef unsigned char __u_char;
+typedef unsigned short int __u_short;
+typedef unsigned int __u_int;
+typedef unsigned long int __u_long;
+
+
+typedef signed char __int8_t;
+typedef unsigned char __uint8_t;
+typedef signed short int __int16_t;
+typedef unsigned short int __uint16_t;
+typedef signed int __int32_t;
+typedef unsigned int __uint32_t;
+
+
+
+
+__extension__ typedef signed long long int __int64_t;
+__extension__ typedef unsigned long long int __uint64_t;
+
+
+
+typedef __int8_t __int_least8_t;
+typedef __uint8_t __uint_least8_t;
+typedef __int16_t __int_least16_t;
+typedef __uint16_t __uint_least16_t;
+typedef __int32_t __int_least32_t;
+typedef __uint32_t __uint_least32_t;
+typedef __int64_t __int_least64_t;
+typedef __uint64_t __uint_least64_t;
+
+
+
+
+
+
+__extension__ typedef long long int __quad_t;
+__extension__ typedef unsigned long long int __u_quad_t;
+
+
+
+
+
+
+
+__extension__ typedef long long int __intmax_t;
+__extension__ typedef unsigned long long int __uintmax_t;
+# 141 "/usr/include/bits/types.h" 3
+# 1 "/usr/include/bits/typesizes.h" 1 3
+# 142 "/usr/include/bits/types.h" 2 3
+# 1 "/usr/include/bits/time64.h" 1 3
+# 143 "/usr/include/bits/types.h" 2 3
+
+
+__extension__ typedef __uint64_t __dev_t;
+__extension__ typedef unsigned int __uid_t;
+__extension__ typedef unsigned int __gid_t;
+__extension__ typedef unsigned long int __ino_t;
+__extension__ typedef __uint64_t __ino64_t;
+__extension__ typedef unsigned int __mode_t;
+__extension__ typedef unsigned int __nlink_t;
+__extension__ typedef long int __off_t;
+__extension__ typedef __int64_t __off64_t;
+__extension__ typedef int __pid_t;
+__extension__ typedef struct { int __val[2]; } __fsid_t;
+__extension__ typedef long int __clock_t;
+__extension__ typedef unsigned long int __rlim_t;
+__extension__ typedef __uint64_t __rlim64_t;
+__extension__ typedef unsigned int __id_t;
+__extension__ typedef long int __time_t;
+__extension__ typedef unsigned int __useconds_t;
+__extension__ typedef long int __suseconds_t;
+__extension__ typedef __int64_t __suseconds64_t;
+
+__extension__ typedef int __daddr_t;
+__extension__ typedef int __key_t;
+
+
+__extension__ typedef int __clockid_t;
+
+
+__extension__ typedef void * __timer_t;
+
+
+__extension__ typedef long int __blksize_t;
+
+
+
+
+__extension__ typedef long int __blkcnt_t;
+__extension__ typedef __int64_t __blkcnt64_t;
+
+
+__extension__ typedef unsigned long int __fsblkcnt_t;
+__extension__ typedef __uint64_t __fsblkcnt64_t;
+
+
+__extension__ typedef unsigned long int __fsfilcnt_t;
+__extension__ typedef __uint64_t __fsfilcnt64_t;
+
+
+__extension__ typedef int __fsword_t;
+
+__extension__ typedef int __ssize_t;
+
+
+__extension__ typedef long int __syscall_slong_t;
+
+__extension__ typedef unsigned long int __syscall_ulong_t;
+
+
+
+typedef __off64_t __loff_t;
+typedef char *__caddr_t;
+
+
+__extension__ typedef int __intptr_t;
+
+
+__extension__ typedef unsigned int __socklen_t;
+
+
+
+
+typedef int __sig_atomic_t;
+
+
+
+
+
+
+
+__extension__ typedef __int64_t __time64_t;
+# 28 "/usr/include/stdint.h" 2 3
+# 1 "/usr/include/bits/wchar.h" 1 3
+# 29 "/usr/include/stdint.h" 2 3
+# 1 "/usr/include/bits/wordsize.h" 1 3
+# 30 "/usr/include/stdint.h" 2 3
+# 38 "/usr/include/stdint.h" 3
+# 1 "/usr/include/bits/stdint-intn.h" 1 3
+# 24 "/usr/include/bits/stdint-intn.h" 3
+typedef __int8_t int8_t;
+typedef __int16_t int16_t;
+typedef __int32_t int32_t;
+typedef __int64_t int64_t;
+# 39 "/usr/include/stdint.h" 2 3
+
+
+# 1 "/usr/include/bits/stdint-uintn.h" 1 3
+# 24 "/usr/include/bits/stdint-uintn.h" 3
+typedef __uint8_t uint8_t;
+typedef __uint16_t uint16_t;
+typedef __uint32_t uint32_t;
+typedef __uint64_t uint64_t;
+# 42 "/usr/include/stdint.h" 2 3
+
+
+
+# 1 "/usr/include/bits/stdint-least.h" 1 3
+# 25 "/usr/include/bits/stdint-least.h" 3
+typedef __int_least8_t int_least8_t;
+typedef __int_least16_t int_least16_t;
+typedef __int_least32_t int_least32_t;
+typedef __int_least64_t int_least64_t;
+
+
+typedef __uint_least8_t uint_least8_t;
+typedef __uint_least16_t uint_least16_t;
+typedef __uint_least32_t uint_least32_t;
+typedef __uint_least64_t uint_least64_t;
+# 46 "/usr/include/stdint.h" 2 3
+
+
+
+
+
+typedef signed char int_fast8_t;
+
+
+
+
+
+typedef int int_fast16_t;
+typedef int int_fast32_t;
+__extension__
+typedef long long int int_fast64_t;
+
+
+
+typedef unsigned char uint_fast8_t;
+
+
+
+
+
+typedef unsigned int uint_fast16_t;
+typedef unsigned int uint_fast32_t;
+__extension__
+typedef unsigned long long int uint_fast64_t;
+# 86 "/usr/include/stdint.h" 3
+typedef int intptr_t;
+
+
+typedef unsigned int uintptr_t;
+
+
+
+
+typedef __intmax_t intmax_t;
+typedef __uintmax_t uintmax_t;
+# 12 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stdint.h" 2 3
+#pragma GCC diagnostic pop
+# 2 "kernel.c" 2
+# 1 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stddef.h" 1 3
+# 160 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stddef.h" 3
+typedef int ptrdiff_t;
+# 229 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stddef.h" 3
+typedef unsigned int size_t;
+# 344 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stddef.h" 3
+typedef long int wchar_t;
+# 440 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stddef.h" 3
+typedef struct {
+  long long __max_align_ll __attribute__((__aligned__(__alignof__(long long))));
+  long double __max_align_ld __attribute__((__aligned__(__alignof__(long double))));
+
+
+
+
+
+
+  __float128 __max_align_f128 __attribute__((__aligned__(__alignof(__float128))));
+
+} max_align_t;
+# 465 "/usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/include/stddef.h" 3
+  typedef __typeof__(nullptr) nullptr_t;
+# 3 "kernel.c" 2
+# 1 "include/ext2.h" 1
+
+
+
+
+
+
+
+
+# 8 "include/ext2.h"
+struct ext2_superblock {
+    uint32_t s_inodes_count;
+    uint32_t s_blocks_count;
+    uint32_t s_r_blocks_count;
+    uint32_t s_free_blocks_count;
+    uint32_t s_free_inodes_count;
+    uint32_t s_first_data_block;
+    uint32_t s_log_block_size;
+    int32_t s_log_frag_size;
+    uint32_t s_blocks_per_group;
+    uint32_t s_frags_per_group;
+    uint32_t s_inodes_per_group;
+    uint32_t s_mtime;
+    uint32_t s_wtime;
+    uint16_t s_mnt_count;
+    uint16_t s_max_mnt_count;
+    uint16_t s_magic;
+
+} __attribute__((packed));
+
+
+struct ext2_group_desc {
+    uint32_t bg_block_bitmap;
+    uint32_t bg_inode_bitmap;
+    uint32_t bg_inode_table;
+    uint16_t bg_free_blocks_count;
+    uint16_t bg_free_inodes_count;
+    uint16_t bg_used_dirs_count;
+    uint16_t bg_pad;
+    uint32_t bg_reserved[3];
+} __attribute__((packed));
+
+struct ext2_inode {
+    uint16_t i_mode;
+    uint16_t i_uid;
+    uint32_t i_size;
+    uint32_t i_atime;
+    uint32_t i_ctime;
+    uint32_t i_mtime;
+    uint32_t i_dtime;
+    uint16_t i_gid;
+    uint16_t i_links_count;
+    uint32_t i_blocks;
+    uint32_t i_flags;
+    uint32_t i_osd1;
+    uint32_t i_block[15];
+    uint32_t i_generation;
+    uint32_t i_file_acl;
+    uint32_t i_dir_acl;
+    uint32_t i_faddr;
+    uint8_t i_frag;
+    uint8_t i_fsize;
+    uint16_t i_pad1;
+    uint32_t i_reserved2[2];
+} __attribute__((packed));
+struct ext2_group_desc;
+struct ext2_inode;
+
+void read_inode(uint32_t inode_num, struct ext2_group_desc *gdt, struct ext2_inode *out_inode);
+# 4 "kernel.c" 2
+# 1 "include/ata.h" 1
+# 43 "include/ata.h"
+void ata_init(void);
+
+
+
+
+
+
+
+void disk_read(uint32_t lba, uint8_t *buffer, uint32_t sector_count);
+# 5 "kernel.c" 2
+# 1 "include/keyboard.h" 1
+
+
+
+
+char keyboard_buffer_pop();
+void keyboard_init();
+# 6 "kernel.c" 2
+# 1 "include/idt.h" 1
+
+
+
+
+
+
+
+struct idt_entry {
+    uint16_t base_low;
+    uint16_t selector;
+    uint8_t always0;
+    uint8_t flags;
+    uint16_t base_high;
+} __attribute__((packed));
+
+struct idt_ptr {
+    uint16_t limit;
+    uint32_t base;
+} __attribute__((packed));
+
+extern struct idt_entry idt[256];
+extern struct idt_ptr idt_ptr;
+
+void lidt(struct idt_ptr *idtp);
+void idt_init(void)
+# 7 "kernel.c" 2
+
+struct ext2_group_desc *gdt;
+
+
+
+
+
+extern uint32_t g_block_size;
+extern void serial_init();
+extern void serial_puts(const char *s);
+extern void disk_read(uint32_t lba, uint8_t *buffer, uint32_t sector_count);
+extern void fs_init(struct ext2_superblock *sb);
+extern void read_fs_block(uint32_t block_id, uint8_t *buffer);
+extern void serial_puts(const char *s);
+extern void serial_putc(char c);
+extern void outb(uint16_t port, uint8_t val);
+extern uint8_t inb(uint16_t port);
+extern struct idt_ptr idt_ptr;
+
+void handle_command(char *cmd);
+void shell_backspace(int *pos);
+
+
+void clear_screen() {
+  uint16_t *vga_buffer = (uint16_t*)0xB8000;
+  for (int i = 0; i < 25 * 80; i++) {
+    vga_buffer[i] = 0x0720;
+  }
+}
+
+int strcmp(const char *a, const char *b)
+{
+  while (*a && (*a == *b)) {
+    a++;
+    b++;
+  }
+  return *(unsigned char*)a - *(unsigned char*)b;
+}
+
+
+void vga_puts(const char* str) {
+
+  unsigned short* vga = (unsigned short*)0xB8000;
+
+
+  int i = 0;
+  while (str[i] != '\0') {
+
+    vga[i] = (0x0F << 8) | str[i];
+    i++;
+  }
+}
+
+void print_hex(uint32_t val) {
+
+  char buf[11];
+
+  buf[0] = '0';
+  buf[1] = 'x';
+  buf[10] = '\0';
+
+  const char *lookup = "0123456789ABCDEF";
+
+
+  for (int i = 9; i >= 2; i--) {
+    buf[i] = lookup[val & 0x0F];
+    val >>= 4;
+  }
+
+  serial_puts(buf);
+}
+
+void shell_backspace(int *pos)
+{
+  if (*pos <= 0) return;
+
+  (*pos)--;
+
+  serial_puts("\b \b");
+}
+
+void run_shell()
+{
+  char input_buffer[128];
+  int pos = 0;
+
+  vga_puts("Welcome to MyKernel Shell (v0.1)\n");
+  vga_puts("OS> ");
+
+  while (1)
+  {
+    char c = keyboard_buffer_pop();
+
+    if (c == 0)
+    {
+      __asm__("hlt");
+      continue;
+    }
+
+
+    if (c == '\n')
+    {
+      input_buffer[pos] = '\0';
+
+      serial_puts("\nCMD: ");
+      serial_puts(input_buffer);
+      serial_puts("\n");
+
+      handle_command(input_buffer);
+
+      pos = 0;
+      serial_puts("OS> ");
+    }
+
+
+    else if (c == '\b')
+    {
+      shell_backspace(&pos);
+    }
+
+
+    else
+    {
+      if (pos < 128 - 1)
+      {
+        input_buffer[pos++] = c;
+        serial_putc(c);
+      }
+    }
+  }
+}
+
+
+void handle_command(char *cmd)
+{
+  if (strcmp(cmd, "help") == 0) {
+    serial_puts("commands: help, ls, clear\n");
+  }
+  else if (strcmp(cmd, "ls") == 0) {
+    serial_puts("TODO: call ext2 ls /\n");
+
+  }
+  else if (strcmp(cmd, "clear") == 0) {
+    clear_screen();
+  }
+  else if (cmd[0] == 0) {
+    return;
+  }
+  else {
+    serial_puts("unknown command\n");
+  }
+}
+
+
+
+void kmain(void) {
+  ata_init();
+  serial_init();
+  clear_screen();
+  serial_puts("--- Kernel Booting ---\n");
+
+
+
+
+  __attribute__((aligned(8))) static uint8_t sb_buffer[1024];
+  __attribute__((aligned(8))) static uint8_t gdt_buffer[4096];
+
+
+  disk_read(2, sb_buffer, 2);
+  struct ext2_superblock *sb = (struct ext2_superblock *)sb_buffer;
+
+  if (sb->s_magic == 0xEF53) {
+    fs_init(sb);
+
+    serial_puts("DEBUG: --- FS Meta Data ---\n");
+    serial_puts("Block Size: "); print_hex(1024 << sb->s_log_block_size);
+    serial_puts("First Data Block: "); print_hex(sb->s_first_data_block);
+    serial_puts("Inodes per group: "); print_hex(sb->s_inodes_per_group);
+    serial_puts("BLOCK SIZE FINAL: ");
+    print_hex(g_block_size);
+# 201 "kernel.c"
+    uint32_t gdt_block_id = sb->s_first_data_block + 1;
+
+
+    read_fs_block(gdt_block_id, gdt_buffer);
+
+
+    struct ext2_group_desc *gdt = (struct ext2_group_desc *)gdt_buffer;
+    serial_puts("DEBUG: GDT[0].bg_inode_table = ");
+    print_hex(gdt[0].bg_inode_table);
+    serial_puts("\n");
+    serial_puts("DEBUG: Validating GDT[0]...\n");
+    serial_puts("bg_inode_table: "); print_hex(gdt[0].bg_inode_table); serial_puts("\n");
+
+    if (gdt[0].bg_inode_table == 0 || gdt[0].bg_inode_table > 0x10000) {
+      serial_puts("FATAL: GDT corrupted or wrong buffer offset!\n");
+      while(1);
+    }
+    serial_puts("\n");
+
+
+    struct ext2_inode root_inode;
+    read_inode(2, gdt, &root_inode);
+
+
+    if ((root_inode.i_mode & 0xF000) == 0x4000) {
+      serial_puts("Directory confirmed.\n");
+
+      __asm__("cli");
+
+      idt_init();
+
+      outb(0x20, 0x11);
+
+      lidt(&idt_ptr);
+
+      __asm__("sti");
+
+      run_shell();
+    } else {
+
+      serial_puts("FATAL: Inode 2 i_mode is: ");
+      print_hex(root_inode.i_mode);
+      serial_puts("\n");
+    }
+  } else {
+    serial_puts("Error: Not an Ext2 filesystem (Magic mismatch).\n");
+  }
+
+  while (1);
+}
