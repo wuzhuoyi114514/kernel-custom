@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "../include/ext2.h"
+#include "../include/debug.h"
 #include "../include/vga.h"
 #include "../include/fs_runtime.h"
 #include "../include/shell_state.h"
@@ -8,11 +9,16 @@
 extern uint32_t ext2_lookup(uint32_t dir_inode_num, const char *name);
 
 void ext2_cd(const char *path) {
+    dbg_msg("cd", "change directory request");
     if (path == 0 || path[0] == '\0') return; 
+    serial_puts("[cd] path=");
+    serial_puts(path);
+    serial_puts("\n");
 
     // 1. 查找目标 Inode
     uint32_t target_inode = ext2_lookup(g_cwd_inode, path);
     if (target_inode == 0) {
+        dbg_msg("cd", "target not found");
         vga_puts("cd: No such directory.\n");
         return;
     }
@@ -21,6 +27,7 @@ void ext2_cd(const char *path) {
     struct ext2_inode target_ino_data;
     read_inode(target_inode, g_sb, fs_gdt, &target_ino_data);
     if ((target_ino_data.i_mode & 0xF000) != 0x4000) {
+        dbg_kv("cd", "not_directory_mode", target_ino_data.i_mode);
         vga_puts("cd: Not a directory.\n");
         return;
     }
@@ -49,4 +56,8 @@ void ext2_cd(const char *path) {
     }
 
     g_cwd_inode = target_inode; 
+    dbg_kv("cd", "cwd_inode", g_cwd_inode);
+    serial_puts("[cd] cwd_path=");
+    serial_puts(g_cwd_path);
+    serial_puts("\n");
 }

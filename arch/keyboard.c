@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "../include/debug.h"
 #include "../include/io.h"
 extern void serial_putc(char c); 
 
@@ -37,6 +38,11 @@ void keyboard_buffer_push(char c) {
     if (next != tail) {
         kbd_buffer[head] = c;
         head = next;
+        if (c >= ' ' && c <= '~') {
+            dbg_msg("kbd", "buffer push printable");
+        } else {
+            dbg_kv("kbd", "buffer_push_code", (uint32_t)(unsigned char)c);
+        }
     }
 }
 
@@ -49,13 +55,16 @@ char keyboard_buffer_pop(void) {
 
 // 中断服务程序
 void keyboard_handler(void) {
+    dbg_msg("kbd", "irq handler enter");
     uint8_t status = inb(0x64);
     if (status & 0x01) { 
         uint8_t scancode = inb(0x60);
+        dbg_kv("kbd", "scancode", scancode);
         
         // 分支 1：处理 E0 前缀
         if (scancode == 0xE0) {
             g_is_e0 = 1;
+            dbg_msg("kbd", "e0 prefix");
         } 
         // 分支 2：处理紧跟在 E0 后面的方向键
         else if (g_is_e0) {
@@ -63,24 +72,30 @@ void keyboard_handler(void) {
             
             if (scancode == 0x48) {        // 方向键【上】
                 keyboard_buffer_push(0x11); // 发射自定义的上键信号
+                dbg_msg("kbd", "arrow up");
             } 
             else if (scancode == 0x50) {   // 方向键【下】
                 keyboard_buffer_push(0x12); // 发射自定义的下键信号
+                dbg_msg("kbd", "arrow down");
             }
                 else if (scancode == 0x4B) {   // 【新增】方向键【左】
                 keyboard_buffer_push(0x13); // 发射自定义的左键信号
+                dbg_msg("kbd", "arrow left");
             }
             else if (scancode == 0x4D) {   // 【新增】方向键【右】
                 keyboard_buffer_push(0x14); // 发射自定义的右键信号
+                dbg_msg("kbd", "arrow right");
             }
         } 
         // 分支 3：普通的标准键与 Shift 状态机
         else {
             if (scancode == 0x2A || scancode == 0x36) {
                 g_shift_pressed = 1;
+                dbg_msg("kbd", "shift down");
             } 
             else if (scancode == 0xAA || scancode == 0xB6) {
                 g_shift_pressed = 0;
+                dbg_msg("kbd", "shift up");
             }
             else if (scancode < 0x80) {
                 if (scancode < 128) {
@@ -88,6 +103,7 @@ void keyboard_handler(void) {
                     if (c != 0) {
                         keyboard_buffer_push(c);
                         serial_putc(c); 
+                        dbg_kv("kbd", "char", (uint32_t)(unsigned char)c);
                     }
                 }
             }

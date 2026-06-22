@@ -7,18 +7,12 @@
 
 
 void ext2_ls(uint32_t dir_inode_num) {
-      // ====== 终极抓贼打印 B ======
-    serial_puts("\n[AT_SHELL] Pointer Variable Address (&fs_gdt) = "); 
-    print_hex((uint32_t)&fs_gdt);
-    serial_puts("\n[AT_SHELL] Pointer Inside Value     (fs_gdt)  = "); 
-    print_hex((uint32_t)fs_gdt);
-    serial_puts("\n");
-    // ==========================
+    dbg_kv("ls", "dir_inode", dir_inode_num);
     struct ext2_inode inode;
     
     // 安全检查
     if (fs_gdt == 0) {
-      serial_puts("LS side &fs_gdt = "); print_hex((uint32_t)&fs_gdt); serial_puts("\n");
+      dbg_msg("ls", "fs_gdt not initialized");
         vga_puts("Error: File system GDT not initialized.\n");
         return;
     }
@@ -28,6 +22,7 @@ void ext2_ls(uint32_t dir_inode_num) {
 
     // 2. 安全检查：确保它是一个目录
     if ((inode.i_mode & 0xF000) != 0x4000) {
+        dbg_kv("ls", "not_directory_mode", inode.i_mode);
         vga_puts("Error: Inode is not a directory.\n");
         return;
     }
@@ -61,8 +56,12 @@ void ext2_ls(uint32_t dir_inode_num) {
 
             vga_puts(name_buf);
             vga_puts("\n");
+            serial_puts("[ls] entry=");
+            serial_puts(name_buf);
+            serial_puts("\n");
         }
 
         offset += entry->rec_len;
     }
+    dbg_msg("ls", "completed");
 }

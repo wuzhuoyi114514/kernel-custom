@@ -148,33 +148,32 @@ struct syscall_regs {
 void c_syscall_handler(struct syscall_regs *regs) {
   // 约定：用 eax 传递系统调用号
   uint32_t syscall_num = regs->eax;
-  serial_puts("DEBUG SYSCALL: Got EAX = "); 
-  print_hex(syscall_num);
-  serial_puts(", EBX = ");                 
-  print_hex(regs->ebx);
-  serial_puts("\n");
+  dbg_kv("syscall", "eax", syscall_num);
+  dbg_kv("syscall", "ebx", regs->ebx);
   switch (syscall_num) {
     case 1: {
               // 1 号系统调用：打印字符串
               // 约定：用 ebx 传递用户态字符串的地址
               char *str = (char *)regs->ebx;
+              dbg_msg("syscall", "print user string");
               vga_puts(str); 
               break;
             }
     case 2: {
               // 2 号系统调用：清屏
+              dbg_msg("syscall", "clear screen");
               clear_screen();
               break;
             }
-            // 在内核入口文件的 c_syscall_handler 中
     case 3: { // 假设 3 号系统调用是 sys_exit
-              serial_puts("User program exited.\n");
+              dbg_msg("syscall", "user program exited");
               // 这里其实是一个非常高深的话题：如何恢复用户态前的内核栈？
               // 最简单粗暴的临时做法：在 shell 循环中利用 setjmp/longjmp 或者干脆重新调用一次 run_shell()
               // 但更推荐的做法是：让你的 asm_switch_to_user 采用 call 指令而非 jmp
               break;
             }
     default:
+            dbg_msg("syscall", "unknown syscall");
             vga_puts("Syscall Error: Unknown syscall number.\n");
             break;
   }
@@ -436,14 +435,16 @@ void run_user_program_at(uint32_t entry_point) {
 // ============ 【新增】用户程序运行函数 ============
 // 从文件系统中加载并执行用户程序
 bool run_user_program_from_file(const char *filepath) {
-  vga_puts("[DEBUG] Attempting to load: ");
-  vga_puts(filepath);
-  vga_puts("\n");
+  dbg_msg("user", "loading program from file");
+  serial_puts("[user] path=");
+  serial_puts(filepath);
+  serial_puts("\n");
 
   // 1. 解析路径获取 inode
   uint32_t inode_num = resolve_path(filepath);
   
   if (inode_num == 0) {
+    dbg_msg("user", "file not found");
     vga_set_color(COLOR_WHITE, COLOR_RED);
     vga_puts("Error: File not found - ");
     vga_puts(filepath);
@@ -458,6 +459,7 @@ bool run_user_program_from_file(const char *filepath) {
 
   uint16_t file_type = file_inode.i_mode & 0xF000;
   if (file_type == 0x4000) {
+    dbg_msg("user", "target is a directory");
     // 0x4000 是目录类型
     vga_set_color(COLOR_WHITE, COLOR_RED);
     vga_puts("Error: ");
@@ -468,6 +470,7 @@ bool run_user_program_from_file(const char *filepath) {
   }
 
   if (file_type != 0x8000) {
+    dbg_msg("user", "invalid executable type");
     // 0x8000 是常规文件类型
     vga_set_color(COLOR_WHITE, COLOR_RED);
     vga_puts("Error: Invalid file type (mode=0x");
@@ -479,11 +482,10 @@ bool run_user_program_from_file(const char *filepath) {
 
   // 3. 检查文件大小
   uint32_t file_size = file_inode.i_size;
-  vga_puts("[DEBUG] File size: ");
-  print_hex(file_size);
-  vga_puts(" bytes\n");
+  dbg_kv("user", "file_size", file_size);
 
   if (file_size == 0) {
+    dbg_msg("user", "file is empty");
     vga_set_color(COLOR_WHITE, COLOR_RED);
     vga_puts("Error: File is empty\n");
     vga_reset_color();
@@ -491,6 +493,7 @@ bool run_user_program_from_file(const char *filepath) {
   }
 
   if (file_size > USER_PROGRAM_MAX_SIZE) {
+    dbg_msg("user", "file too large");
     vga_set_color(COLOR_WHITE, COLOR_RED);
     vga_puts("Error: File too large (max ");
     print_hex(USER_PROGRAM_MAX_SIZE);
@@ -500,13 +503,13 @@ bool run_user_program_from_file(const char *filepath) {
   }
 
   // 4. 加载文件到用户空间
-  vga_puts("[DEBUG] Loading to 0x");
-  print_hex(USER_PROGRAM_BASE);
-  vga_puts("...\n");
+  dbg_kv("user", "load_addr", USER_PROGRAM_BASE);
+  dbg_kv("user", "load_size", (file_size + 0xFFFu) & ~0xFFFu);
 
   paging_mark_user_range(USER_PROGRAM_BASE, (file_size + 0xFFFu) & ~0xFFFu);
 
   if (!load_file_to_memory(inode_num, (uint8_t *)USER_PROGRAM_BASE)) {
+    dbg_msg("user", "load failed");
     vga_set_color(COLOR_WHITE, COLOR_RED);
     vga_puts("Error: Failed to load file into memory\n");
     vga_reset_color();
@@ -515,16 +518,14 @@ bool run_user_program_from_file(const char *filepath) {
 
   // 5. 执行用户程序
   vga_set_color(COLOR_GREEN, COLOR_BLACK);
-  vga_puts("[INFO] Launching user program at 0x");
-  print_hex(USER_PROGRAM_BASE);
-  vga_puts("\n");
+  dbg_kv("user", "launch", USER_PROGRAM_BASE);
   vga_reset_color();
 
   run_user_program_at(USER_PROGRAM_BASE);
   
   // 用户程序执行完后回到这里（如果采用了 call 而非 jmp）
   vga_set_color(COLOR_YELLOW, COLOR_BLACK);
-  vga_puts("[INFO] User program returned\n");
+  dbg_msg("user", "program returned");
   vga_reset_color();
   
   return true;
@@ -630,6 +631,9 @@ void handle_command(char *cmd)
 // 定义一个足够大的全局缓冲区，防止栈溢出
 // 定义独立缓冲区，彻底隔离元数据
 void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
+  dbg_msg("boot", "kmain entry");
+  dbg_kv("boot", "mb_magic", mb_magic);
+  dbg_kv("boot", "mb_info", mb_info_addr);
    *(uint16_t*)0xB8000 = 0x4F41; 
   if (!ata_init()) {
         panic("ATA subsystem failed to initialize.");
@@ -637,10 +641,13 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
   serial_init();
   clear_screen();
   gdt_init();
+  dbg_msg("boot", "gdt initialized");
   idt_init();
+  dbg_msg("boot", "idt initialized");
   memory_init(mb_magic, mb_info_addr);
   serial_puts("--- Kernel Booting ---\n");
   __asm__ __volatile__("sti");
+  dbg_msg("boot", "interrupts enabled");
 
 
   /* * 1. 使用独立的、且强制 8 字节对齐的缓冲区
@@ -652,20 +659,16 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
   // 2. 读取超级块 (注意：此处硬编码 LBA 2 仅适用于无分区表的 Raw Image)
   probe_ext2_partition();            // 1. 先动态探测分区
   disk_read(ext2_start_lba + 2, sb_buffer, 2); // 2. 相对偏移 2 读出超级块
-  serial_puts("\nGot Superblock!!!\n");
+  dbg_msg("fs", "superblock read complete");
   struct ext2_superblock *sb = (struct ext2_superblock *)sb_buffer;
 
   if (sb->s_magic == 0xEF53) {
-    serial_puts("FS INIT\n");
+    dbg_msg("fs", "ext2 magic ok");
     fs_init((struct ext2_superblock *)sb_buffer); // 3. 传入你的 fs_init 算大小 
-                                                  // --- 在这里添加 ---
-    serial_puts("DEBUG: --- FS Meta Data ---\n");
-    serial_puts("Block Size: "); print_hex(1024 << sb->s_log_block_size); // 真正的字节数
-    serial_puts("First Data Block: "); print_hex(sb->s_first_data_block);
-    serial_puts("Inodes per group: "); print_hex(sb->s_inodes_per_group);
-    serial_puts("BLOCK SIZE FINAL: ");
-    print_hex(g_block_size);
-    serial_puts("\n");
+    dbg_kv("fs", "superblock_block_size", 1024 << sb->s_log_block_size);
+    dbg_kv("fs", "first_data_block", sb->s_first_data_block);
+    dbg_kv("fs", "inodes_per_group", sb->s_inodes_per_group);
+    dbg_kv("fs", "runtime_block_size", g_block_size);
     //serial_puts("DEBUG: Dumping raw disk sectors from LBA 2...\n");
     //uint8_t dump_buf[512];
 
@@ -688,24 +691,16 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
     // 3. 打印出完整的 GDT 区域，观察是否存在魔数或有效特征
     fs_gdt = (struct ext2_group_desc *)gdt_buffer; 
     g_sb = sb;  // ✅ 保存全局 superblock 指针
-    // ====== 终极抓贼打印 A ======
-    serial_puts("\n[AM_INIT] Pointer Variable Address (&fs_gdt) = "); 
-    print_hex((uint32_t)&fs_gdt);
-    serial_puts("\n[AM_INIT] Pointer Inside Value     (fs_gdt)  = "); 
-    print_hex((uint32_t)fs_gdt);
-    serial_puts("\n");
-    // ==========================
-    serial_puts("DEBUG: GDT[0].bg_inode_table = "); 
-    print_hex(fs_gdt[0].bg_inode_table); 
-    serial_puts("\n");
-    serial_puts("DEBUG: Validating GDT[0]...\n");
-    serial_puts("bg_inode_table: "); print_hex(fs_gdt[0].bg_inode_table); serial_puts("\n");
+    dbg_kv("fs", "fs_gdt_addr", (uint32_t)&fs_gdt);
+    dbg_kv("fs", "fs_gdt_value", (uint32_t)fs_gdt);
+    dbg_kv("fs", "gdt0_inode_table", fs_gdt[0].bg_inode_table);
+    dbg_msg("fs", "validating gdt[0]");
 
     if (fs_gdt[0].bg_inode_table == 0 || fs_gdt[0].bg_inode_table > 0x10000) {
-      serial_puts("FATAL: GDT corrupted or wrong buffer offset!\n");
+      dbg_msg("fs", "fatal: gdt corrupted or wrong buffer offset");
       while(1);
     }
-    serial_puts("\n");
+    dbg_msg("fs", "gdt validation done");
 
     // 4. 读取根目录 Inode
     struct ext2_inode root_inode;
@@ -713,7 +708,7 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
 
     // 5. 严谨的目录类型判定
     if ((root_inode.i_mode & 0xF000) == 0x4000) {
-      serial_puts("Directory confirmed.\n");
+      dbg_msg("fs", "root inode is a directory");
       //最后一步
 
       // 填 ISR 表！！！
@@ -722,15 +717,12 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
 
       run_shell();
     } else {
-      // 调试：打印出 i_mode 的原始值，看看它到底是多少
-      serial_puts("FATAL: Inode 2 i_mode is: ");
+      dbg_kv("fs", "root_inode_mode", root_inode.i_mode);
       panic("Filesystem Error");
-      print_hex(root_inode.i_mode);
-      serial_puts("\n");
     }
   } else {
     panic("Error: Not an Ext2 filesystem (Magic mismatch).");
-    serial_puts("Error: Not an Ext2 filesystem (Magic mismatch).\n");
+    dbg_msg("fs", "not an ext2 filesystem");
   }
 
   while (1);

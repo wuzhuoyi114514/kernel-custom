@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "../include/ext2.h"
+#include "../include/debug.h"
 #include "../include/fs.h"
 #include "../include/disk.h"
 #include "../include/fs_runtime.h"
@@ -7,6 +8,10 @@
 
 // 在指定目录 dir_inode_num 下，寻找名字为 name 的子项，返回它的 Inode 号
 uint32_t ext2_lookup(uint32_t dir_inode_num, const char *name) {
+    dbg_kv("lookup", "dir_inode", dir_inode_num);
+    serial_puts("[lookup] name=");
+    serial_puts(name);
+    serial_puts("\n");
     struct ext2_inode inode;
     read_inode(dir_inode_num, g_sb, fs_gdt, &inode);
 
@@ -34,10 +39,12 @@ uint32_t ext2_lookup(uint32_t dir_inode_num, const char *name) {
 
             // 【核心匹配】如果名字对上了！
             if (strcmp(name_buf, name) == 0) {
+                dbg_kv("lookup", "match_inode", entry->inode);
                 return entry->inode; // 找到了，返回它的 Inode 号
             }
         }
         offset += entry->rec_len;
     }
+    dbg_msg("lookup", "not found");
     return 0; // 没找到
 }

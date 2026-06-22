@@ -198,9 +198,7 @@ static uint32_t read_cr2(void) {
 }
 
 void page_fault_handler(void) {
-    serial_puts("PAGE FAULT @ ");
-    print_hex(read_cr2());
-    serial_puts("\n");
+    dbg_kv("mm", "page_fault_addr", read_cr2());
     panic("Page fault");
     while (1) {
     }
@@ -218,6 +216,8 @@ void heap_init(void) {
     g_heap_head->next = NULL;
     g_heap_head->prev = NULL;
     g_heap_ready = true;
+    dbg_kv("mm", "heap_base", (uint32_t)g_heap);
+    dbg_kv("mm", "heap_size", HEAP_SIZE);
 }
 
 static uint32_t detect_memory_bytes(uint32_t mb_magic, uint32_t mb_info_addr) {
@@ -269,6 +269,9 @@ void memory_init(uint32_t mb_magic, uint32_t mb_info_addr) {
         return;
     }
 
+    dbg_msg("mm", "initializing memory subsystem");
+    dbg_kv("mm", "mb_magic", mb_magic);
+    dbg_kv("mm", "mb_info", mb_info_addr);
     g_total_memory_bytes = detect_memory_bytes(mb_magic, mb_info_addr);
     if (g_total_memory_bytes > MAX_PHYS_MEM_BYTES) {
         g_total_memory_bytes = MAX_PHYS_MEM_BYTES;
@@ -333,20 +336,19 @@ void memory_init(uint32_t mb_magic, uint32_t mb_info_addr) {
 
     heap_init();
 
-    serial_puts("MEM: total=");
-    print_hex(g_total_memory_bytes);
-    serial_puts(" pages=");
-    print_hex(g_total_frames);
-    serial_puts("\n");
+    dbg_kv("mm", "total_bytes", g_total_memory_bytes);
+    dbg_kv("mm", "frames", g_total_frames);
 }
 
 uint32_t pmm_alloc_frame(void) {
     for (uint32_t frame = 0; frame < g_total_frames; frame++) {
         if (!test_frame(frame)) {
             set_frame(frame);
+            dbg_kv("mm", "alloc_frame", frame * PAGE_SIZE);
             return frame * PAGE_SIZE;
         }
     }
+    dbg_msg("mm", "frame allocation failed");
     return 0;
 }
 
@@ -354,6 +356,7 @@ void pmm_free_frame(uint32_t phys_addr) {
     uint32_t frame = frame_index(phys_addr);
     if (frame < g_total_frames) {
         clear_frame(frame);
+        dbg_kv("mm", "free_frame", phys_addr);
     }
 }
 

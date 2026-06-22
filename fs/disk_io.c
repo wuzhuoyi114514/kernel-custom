@@ -35,6 +35,7 @@ struct mbr_sector {
 
 // ==================== 【核心新增 2】: 动态探测分区函数 ====================
 void probe_ext2_partition(void) {
+    dbg_msg("fs", "probing ext2 partition");
     uint8_t mbr_buffer[512];
     
     // 读取磁盘第一个物理扇区 (LBA 0)
@@ -46,9 +47,7 @@ void probe_ext2_partition(void) {
         for (int i = 0; i < 4; i++) {
             if (mbr->partitions[i].partition_type == 0x83) {
                 ext2_start_lba = mbr->partitions[i].start_lba;
-                serial_puts("MBR Probe: Found Ext2 partition at LBA ");
-                print_hex(ext2_start_lba);
-                serial_puts("\n");
+                dbg_kv("fs", "ext2_start_lba", ext2_start_lba);
                 return;
             }
         }
@@ -56,13 +55,14 @@ void probe_ext2_partition(void) {
 
     // 降级处理：没找到或者没分区表，说明是裸镜像，起始 LBA 保持为 0
     ext2_start_lba = 0;
-    serial_puts("MBR Probe: No partition table. Defaulting to Raw LBA 0.\n");
+    dbg_msg("fs", "no partition table, defaulting to raw lba 0");
 }
 
 /**
  * 初始化块大小 (从超级块读取)
  */
 void fs_init(struct ext2_superblock *sb) {
+    dbg_msg("fs", "initializing ext2 metadata");
     // Ext2 块大小计算公式: 1024 << s_log_block_size
     g_block_size = 1024 << sb->s_log_block_size;
 
@@ -75,9 +75,9 @@ void fs_init(struct ext2_superblock *sb) {
     // 3. 预计算每个块能存多少个 Inode，这样读取时就不需要实时做除法了
     g_inodes_per_block = g_block_size / g_inode_size;
     
-    serial_puts("FS: Block size = "); print_hex(g_block_size);
-    serial_puts(", Inode size = "); print_hex(g_inode_size);
-    serial_puts("\n");
+    dbg_kv("fs", "block_size", g_block_size);
+    dbg_kv("fs", "inode_size", g_inode_size);
+    dbg_kv("fs", "inodes_per_block", g_inodes_per_block);
 }
 
 
@@ -89,21 +89,15 @@ void fs_init(struct ext2_superblock *sb) {
 void read_fs_block(uint32_t block_id, uint8_t *buf)
 {
     if (block_id > 0x100000) { 
-        serial_puts("ERROR: Invalid block_id 0x%x! Check GDT parsing.\n");
-        print_hex(block_id);
+        dbg_msg("fs", "invalid block id");
+        dbg_hex("fs", block_id);
         while(1); 
     }
     uint32_t sectors = g_block_size / 512;
     uint32_t lba = block_id * sectors;
-    serial_puts("\n[IO] Reading Block: "); print_hex(block_id);
-    serial_puts(" | Sectors/Block: "); print_hex(sectors);
-    serial_puts(" | Absolute LBA: "); print_hex(ext2_start_lba + lba);
-    serial_puts("\n");
-
-    serial_puts("DBG block=");
-    print_hex(block_id);
-    serial_puts(" lba=");
-    print_hex(lba);
+    dbg_kv("fs", "block_id", block_id);
+    dbg_kv("fs", "sectors_per_block", sectors);
+    dbg_kv("fs", "absolute_lba", ext2_start_lba + lba);
 
     // ==================== 【核心修改 3】：全面解开硬编码 ====================
     // 不管 Ext2 内部怎么算 LBA，丢给底层磁盘驱动时，强制叠加上分区的起始绝对 LBA！

@@ -21,6 +21,8 @@ extern uint8_t inb(uint16_t port);
 extern void insw(uint16_t port, void *addr, uint32_t count);
 
 void disk_read(uint32_t lba, uint8_t *buffer, uint32_t sector_count) {
+    dbg_kv("disk", "lba", lba);
+    dbg_kv("disk", "sector_count", sector_count);
     // 1. 等待驱动器不忙
     while (inb(ATA_REG_STATUS) & ATA_SR_BSY);
 
@@ -42,7 +44,7 @@ void disk_read(uint32_t lba, uint8_t *buffer, uint32_t sector_count) {
             
             // 如果报错
             if (status & ATA_SR_ERR) {
-                serial_puts("ATA READ ERROR\n");
+                dbg_msg("disk", "ata read error");
                 while(1);
             }
             
@@ -52,11 +54,13 @@ void disk_read(uint32_t lba, uint8_t *buffer, uint32_t sector_count) {
         }
 
         if (timeout == 0) {
-            serial_puts("ATA TIMEOUT\n");
+            dbg_msg("disk", "ata timeout");
             while(1);
         }
 
         // 读取 256 个字 (512 字节)
         insw(ATA_REG_DATA, buffer + (i * 512), 256);
+        dbg_kv("disk", "sector_done", i);
     }
+    dbg_msg("disk", "read complete");
 }

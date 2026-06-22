@@ -13,7 +13,7 @@ void read_inode(uint32_t inode_num,
                 struct ext2_inode *out_inode)
 {
     if (inode_num == 0 || inode_num > sb->s_inodes_count) {
-        serial_puts("FS: invalid inode number\n");
+        dbg_kv("inode", "invalid_inode", inode_num);
         return;
     }
 
@@ -26,7 +26,7 @@ void read_inode(uint32_t inode_num,
     uint32_t inodes_per_block = g_block_size / inode_size;
 
     if (inodes_per_block == 0) {
-        serial_puts("FS: inodes_per_block = 0\n");
+        dbg_msg("inode", "inodes_per_block is zero");
         while (1);
     }
 
@@ -43,6 +43,10 @@ void read_inode(uint32_t inode_num,
 
     // 6. 读取 inode 所在 block
     read_fs_block(block_num, safe_inode_buf);
+    dbg_kv("inode", "inode", inode_num);
+    dbg_kv("inode", "table_block", inode_table_block);
+    dbg_kv("inode", "block_num", block_num);
+    dbg_kv("inode", "offset", offset);
 
     // 7. 拷贝 inode
     uint8_t *src = safe_inode_buf + offset;
@@ -52,6 +56,5 @@ void read_inode(uint32_t inode_num,
         dst[i] = src[i];
     }
 
-    // debug
-    serial_puts("FS: inode loaded OK\n");
+    dbg_msg("inode", "loaded ok");
 }
