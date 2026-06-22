@@ -1,8 +1,5 @@
 #include <stdint.h>
-
-// 显式声明外部依赖
-extern void outb(uint16_t port, uint8_t val);
-extern uint8_t inb(uint16_t port);
+#include "../include/io.h"
 extern void serial_putc(char c); 
 
 // 1. 正常未按下 Shift 的映射表

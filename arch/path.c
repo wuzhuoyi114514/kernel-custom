@@ -1,16 +1,14 @@
-#include "../include/path.h"
-#include "../include/ext2.h" // 假设包含了 ext2_inode 等结构
-#include <string.h>       // 你需要自己实现 strlen, strncmp 等基础函数
-#include "../include/fs.h"
-
-// 外部引用底层的 FS 函数
-extern void read_inode(uint32_t inode_num, struct ext2_group_desc *gdt, struct ext2_inode *out_inode);
-extern struct ext2_group_desc *fs_gdt; 
+#include "path.h"
+#include "ext2.h"
+#include "string.h"
+#include "fs.h"
+#include "fs_runtime.h"
+#include "shell_state.h"
 
 // 查找特定目录下的条目 (你之前的逻辑)
 uint32_t find_inode_in_dir(uint32_t parent_inode, const char *name) {
     struct ext2_inode dir_inode;
-   read_inode(parent_inode, fs_gdt, &dir_inode);
+   read_inode(parent_inode, g_sb, fs_gdt, &dir_inode);
 
     // 假设目录大小在 i_block[0] (简单处理，没处理间接块)
     uint8_t block_buf[1024]; 

@@ -1,12 +1,7 @@
 #include <stdint.h>
 #include "../include/ext2.h"
-
-extern void serial_puts(const char *s);
-extern void print_hex(uint32_t val);
-
-extern uint32_t g_block_size;
-extern uint32_t g_inode_size;
-extern void read_fs_block(uint32_t block_id, uint8_t *buffer);
+#include "../include/debug.h"
+#include "../include/fs_runtime.h"
 
 // inode buffer（最大 block size 4K）
 __attribute__((aligned(8)))

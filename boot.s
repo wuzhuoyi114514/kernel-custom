@@ -2,8 +2,8 @@
 section .multiboot
 align 4
     dd 0x1BADB002        ; 魔数 (Magic Number)
-    dd 0x00              ; 标志位 (Flags)
-    dd -(0x1BADB002 + 0) ; 校验和 (Checksum)
+    dd 0x41              ; 标志位 (Flags: mem info + mmap)
+    dd -(0x1BADB002 + 0x41) ; 校验和 (Checksum)
 
 section .text
 global _start
@@ -17,7 +17,9 @@ _start:
     ; 必须在调用任何 C 函数之前完成，否则会栈溢出或破坏内存
     mov esp, stack_top   
 
-    ; 3. 跳转到 C 语言入口点
+    ; 3. 将 multiboot magic / info 作为参数传给 C 入口
+    push ebx
+    push eax
     call kmain           
 
     ; 4. 如果 kmain 返回，进入无限循环防止 CPU 乱跑
@@ -84,6 +86,35 @@ syscall_handler_asm:
     
     ; 注意：此时主 PIC 不需要发送 EOI（0x20），因为 0x80 是软中断，不占用硬件 IRQ 线路
     iret                ; 完美返回 Ring 3！
+
+global page_fault_handler_asm
+extern page_fault_handler
+
+page_fault_handler_asm:
+    cli
+    pusha
+
+    push ds
+    push es
+    push fs
+    push gs
+
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    call page_fault_handler
+
+    pop gs
+    pop fs
+    pop es
+    pop ds
+
+    popa
+    add esp, 4          ; 丢弃 CPU 自动压入的 error code
+    iret
     global asm_switch_to_user
 
 asm_switch_to_user:

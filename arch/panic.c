@@ -1,6 +1,6 @@
-// kernel.c
-#include "../include/vga.h"
-#include "../include/debug.h"
+// 内核入口文件对应的 panic 实现
+#include "vga.h"
+#include "debug.h"
 
 
 // 声明这个函数，方便其他地方调用

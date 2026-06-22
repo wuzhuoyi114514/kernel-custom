@@ -3,10 +3,7 @@
 #include "../include/ext2.h"
 #include "../include/debug.h"
 #include "../include/vga.h"
-
-// 【修改这里】精确匹配 kernel.c 中的定义，用 extern 引用
-extern struct ext2_group_desc *fs_gdt;
-extern uint32_t g_block_size;
+#include "../include/fs_runtime.h"
 
 
 void ext2_ls(uint32_t dir_inode_num) {
@@ -27,7 +24,7 @@ void ext2_ls(uint32_t dir_inode_num) {
     }
     
     // 1. 读取指定的 Inode 结构体（类型完美匹配，不再需要强转！）
-    read_inode(dir_inode_num, fs_gdt, &inode);
+    read_inode(dir_inode_num, g_sb, fs_gdt, &inode);
 
     // 2. 安全检查：确保它是一个目录
     if ((inode.i_mode & 0xF000) != 0x4000) {

@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include "../include/ext2.h"
 #include "../include/debug.h"
+#include "../include/disk.h"
+#include "../include/fs_runtime.h"
 
 uint32_t g_block_size = 1024;
 uint32_t g_inode_size = 128;
@@ -30,9 +32,6 @@ struct mbr_sector {
 } __attribute__((packed));
 
  
-
-// 引用底层的硬盘驱动
-extern void disk_read(uint32_t lba, uint8_t *buffer, uint32_t sector_count);
 
 // ==================== 【核心新增 2】: 动态探测分区函数 ====================
 void probe_ext2_partition(void) {

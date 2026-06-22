@@ -1,11 +1,8 @@
 #include <stdint.h>
 #include "../include/ata.h"
 #include "../include/debug.h"
-
-extern void panic(const char *msg);
-extern void outb(uint16_t port, uint8_t val);
-extern uint8_t inb(uint16_t port);
-extern void insw(uint16_t port, void *addr, uint32_t count);
+#include "../include/io.h"
+#include "../include/panic.h"
 
 bool ata_init(void) {
     serial_puts("ATA: Initializing...\n");

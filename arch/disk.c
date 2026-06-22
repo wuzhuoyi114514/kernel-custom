@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "../include/debug.h"
+#include "../include/io.h"
 
 #define ATA_BASE 0x1F0
 #define ATA_REG_DATA        (ATA_BASE + 0) // <-- 这一行就是缺失的

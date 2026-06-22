@@ -2,18 +2,13 @@
 #include "../include/ext2.h"
 #include "../include/fs.h"
 #include "../include/disk.h"
-
-extern struct ext2_group_desc *fs_gdt;
-extern uint32_t g_block_size;
-extern void read_inode(uint32_t inode_num, struct ext2_group_desc *gdt, struct ext2_inode *inode);
-
-// 外部实现的通用字符串对比
-extern int strcmp(const char *a, const char *b); 
+#include "../include/fs_runtime.h"
+#include "../include/string.h"
 
 // 在指定目录 dir_inode_num 下，寻找名字为 name 的子项，返回它的 Inode 号
 uint32_t ext2_lookup(uint32_t dir_inode_num, const char *name) {
     struct ext2_inode inode;
-    read_inode(dir_inode_num, fs_gdt, &inode);
+    read_inode(dir_inode_num, g_sb, fs_gdt, &inode);
 
     // 安全检查：必须是个目录
     if ((inode.i_mode & 0xF000) != 0x4000) return 0;

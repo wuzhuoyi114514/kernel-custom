@@ -1,13 +1,11 @@
 #include <stdint.h>
 #include "../include/ext2.h"
 #include "../include/vga.h"
+#include "../include/fs_runtime.h"
+#include "../include/shell_state.h"
+#include "../include/string.h"
 
 extern uint32_t ext2_lookup(uint32_t dir_inode_num, const char *name);
-extern struct ext2_group_desc *fs_gdt;
-extern void read_inode(uint32_t inode_num, struct ext2_group_desc *gdt, struct ext2_inode *inode);
-extern uint32_t g_cwd_inode; 
-extern int strcmp(const char *a, const char *b);
-extern char g_cwd_path[128]; 
 
 void ext2_cd(const char *path) {
     if (path == 0 || path[0] == '\0') return; 
@@ -21,7 +19,7 @@ void ext2_cd(const char *path) {
 
     // 2. 【核心修改】亲自读取 Inode 属性，拦截非目录文件
     struct ext2_inode target_ino_data;
-    read_inode(target_inode, fs_gdt, &target_ino_data);
+    read_inode(target_inode, g_sb, fs_gdt, &target_ino_data);
     if ((target_ino_data.i_mode & 0xF000) != 0x4000) {
         vga_puts("cd: Not a directory.\n");
         return;

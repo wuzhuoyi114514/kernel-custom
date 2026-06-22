@@ -61,6 +61,7 @@ void idt_set_gate(unsigned char num, unsigned int base, unsigned short sel, unsi
 // 声明外部的汇编键盘中断包装函数（需要在 boot.s 中实现）
 extern void keyboard_handler_asm(void);
 extern void syscall_handler_asm(void);
+extern void page_fault_handler_asm(void);
 
 // ==================== 5. 初始化函数 ====================
 void idt_init() {
@@ -80,6 +81,7 @@ void idt_init() {
     // 注册系统调用到 0x80 号向量
     // 0xEE = 11101110b -> Present=1, DPL=3 (允许用户态调用), 32位中断门
     idt_set_gate(0x80, (unsigned int)syscall_handler_asm, 0x08, 0xEE);
+    idt_set_gate(0x0E, (unsigned int)page_fault_handler_asm, 0x08, 0x8E);
     // ======================================================
 
     // 设置正确的 Limit 并用 lidt 加载

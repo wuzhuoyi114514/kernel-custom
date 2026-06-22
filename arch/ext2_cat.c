@@ -1,14 +1,10 @@
 #include <stdint.h>
-#include "../include/ext2.h"
+#include "ext2.h"
+#include "vga.h"
+#include "fs_runtime.h"
+#include "shell_state.h"
 
 extern uint32_t ext2_lookup(uint32_t dir_inode_num, const char *name);
-extern struct ext2_group_desc *fs_gdt;
-extern uint32_t g_block_size;
-extern uint32_t g_cwd_inode;
-extern void read_inode(uint32_t inode_num, struct ext2_group_desc *gdt, struct ext2_inode *inode);
-extern void read_fs_block(uint32_t block_id, uint8_t *buffer);
-extern void vga_putc(char c); 
-extern void vga_puts(const char* str);
 
 void ext2_cat(const char *filename) {
     if (filename == 0 || filename[0] == '\0') {
@@ -25,7 +21,7 @@ void ext2_cat(const char *filename) {
 
     // 2. 读取 Inode 结构体
     struct ext2_inode inode;
-    read_inode(file_inode_num, fs_gdt, &inode);
+    read_inode(file_inode_num, g_sb, fs_gdt, &inode);
 
     // 3. 【核心修改】明确区分：如果是目录(0x4000)报错，如果不是普通文件(0x8000)报错
     if ((inode.i_mode & 0xF000) == 0x4000) {
