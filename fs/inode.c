@@ -43,10 +43,6 @@ void read_inode(uint32_t inode_num,
 
     // 6. 读取 inode 所在 block
     read_fs_block(block_num, safe_inode_buf);
-    dbg_kv("inode", "inode", inode_num);
-    dbg_kv("inode", "table_block", inode_table_block);
-    dbg_kv("inode", "block_num", block_num);
-    dbg_kv("inode", "offset", offset);
 
     // 7. 拷贝 inode
     uint8_t *src = safe_inode_buf + offset;
@@ -56,5 +52,4 @@ void read_inode(uint32_t inode_num,
         dst[i] = src[i];
     }
 
-    dbg_msg("inode", "loaded ok");
 }

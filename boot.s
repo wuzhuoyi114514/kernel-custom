@@ -116,11 +116,23 @@ page_fault_handler_asm:
     add esp, 4          ; 丢弃 CPU 自动压入的 error code
     iret
     global asm_switch_to_user
+extern g_user_kernel_esp
+global user_exit_return_stub
+
+user_exit_return_stub:
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov esp, [g_user_kernel_esp]
+    ret
 
 asm_switch_to_user:
     ; C 语言调用约定传递的参数：
     ; [esp + 4] -> entry_point
     ; [esp + 8] -> user_stack_top
+    mov [g_user_kernel_esp], esp
     mov ecx, [esp + 4]  ; ecx = 用户程序入口地址
     mov edx, [esp + 8]  ; edx = 用户栈顶地址
 

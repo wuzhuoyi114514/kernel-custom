@@ -15,6 +15,7 @@
 #include "panic.h"
 #include "gdt.h"
 #include "shell_api.h"
+#include "syscall.h"
 
 #define GDT_KERNEL_CODE 0x08
 #define GDT_KERNEL_DATA 0x10
@@ -59,6 +60,7 @@ struct gdt_ptr {
 struct gdt_entry gdt[6];
 struct gdt_ptr gp;
 struct tss_entry tss;
+uint32_t g_user_kernel_esp = 0;
 
 char g_cwd_path[128] = "/";
 
@@ -118,6 +120,7 @@ void gdt_init()
 
 void handle_command(char *cmd);
 void shell_backspace(int *pos);
+extern void user_exit_return_stub(void);
 
 // --- 简单的显示驱动 ---
 
@@ -146,35 +149,51 @@ struct syscall_regs {
   uint32_t user_ss;
 };
 void c_syscall_handler(struct syscall_regs *regs) {
-  // 约定：用 eax 传递系统调用号
   uint32_t syscall_num = regs->eax;
-  dbg_kv("syscall", "eax", syscall_num);
-  dbg_kv("syscall", "ebx", regs->ebx);
+
   switch (syscall_num) {
-    case 1: {
-              // 1 号系统调用：打印字符串
-              // 约定：用 ebx 传递用户态字符串的地址
-              char *str = (char *)regs->ebx;
-              dbg_msg("syscall", "print user string");
-              vga_puts(str); 
+    case SYS_WRITE: {
+              if (regs->ecx == 0 && regs->edx == 0) {
+                char *str = (char *)regs->ebx;
+                if (str != 0) {
+                  serial_puts(str);
+                  vga_puts(str);
+                  regs->eax = strlen(str);
+                } else {
+                  regs->eax = 0;
+                }
+                break;
+              }
+
+              if (regs->ebx != 1 && regs->ebx != 2) {
+                regs->eax = (uint32_t)-1;
+                break;
+              }
+
+              const char *buf = (const char *)regs->ecx;
+              uint32_t len = regs->edx;
+              for (uint32_t i = 0; i < len; i++) {
+                serial_putc(buf[i]);
+                vga_putc(buf[i]);
+              }
+              regs->eax = len;
               break;
             }
-    case 2: {
-              // 2 号系统调用：清屏
-              dbg_msg("syscall", "clear screen");
+    case SYS_CLEAR: {
               clear_screen();
+              regs->eax = 0;
               break;
             }
-    case 3: { // 假设 3 号系统调用是 sys_exit
-              dbg_msg("syscall", "user program exited");
-              // 这里其实是一个非常高深的话题：如何恢复用户态前的内核栈？
-              // 最简单粗暴的临时做法：在 shell 循环中利用 setjmp/longjmp 或者干脆重新调用一次 run_shell()
-              // 但更推荐的做法是：让你的 asm_switch_to_user 采用 call 指令而非 jmp
+    case SYS_EXIT: {
+              dbg_kv("syscall", "exit_status", regs->ebx);
+              regs->eax = regs->ebx;
+              regs->eip = (uint32_t)user_exit_return_stub;
+              regs->cs = GDT_KERNEL_CODE;
               break;
             }
     default:
-            dbg_msg("syscall", "unknown syscall");
-            vga_puts("Syscall Error: Unknown syscall number.\n");
+            dbg_kv("syscall", "unknown", syscall_num);
+            regs->eax = (uint32_t)-1;
             break;
   }
 }
@@ -436,9 +455,6 @@ void run_user_program_at(uint32_t entry_point) {
 // 从文件系统中加载并执行用户程序
 bool run_user_program_from_file(const char *filepath) {
   dbg_msg("user", "loading program from file");
-  serial_puts("[user] path=");
-  serial_puts(filepath);
-  serial_puts("\n");
 
   // 1. 解析路径获取 inode
   uint32_t inode_num = resolve_path(filepath);
@@ -480,11 +496,7 @@ bool run_user_program_from_file(const char *filepath) {
     return false;
   }
 
-  // 3. 检查文件大小
-  uint32_t file_size = file_inode.i_size;
-  dbg_kv("user", "file_size", file_size);
-
-  if (file_size == 0) {
+  if (file_inode.i_size == 0) {
     dbg_msg("user", "file is empty");
     vga_set_color(COLOR_WHITE, COLOR_RED);
     vga_puts("Error: File is empty\n");
@@ -492,38 +504,24 @@ bool run_user_program_from_file(const char *filepath) {
     return false;
   }
 
-  if (file_size > USER_PROGRAM_MAX_SIZE) {
-    dbg_msg("user", "file too large");
+  // 3. 解析并加载 ELF
+  uint32_t entry_point = 0;
+  if (!load_elf_program_from_inode(inode_num, &entry_point)) {
+    dbg_msg("user", "elf load failed");
     vga_set_color(COLOR_WHITE, COLOR_RED);
-    vga_puts("Error: File too large (max ");
-    print_hex(USER_PROGRAM_MAX_SIZE);
-    vga_puts(" bytes)\n");
+    vga_puts("Error: Invalid or unsupported ELF\n");
     vga_reset_color();
     return false;
   }
 
-  // 4. 加载文件到用户空间
-  dbg_kv("user", "load_addr", USER_PROGRAM_BASE);
-  dbg_kv("user", "load_size", (file_size + 0xFFFu) & ~0xFFFu);
-
-  paging_mark_user_range(USER_PROGRAM_BASE, (file_size + 0xFFFu) & ~0xFFFu);
-
-  if (!load_file_to_memory(inode_num, (uint8_t *)USER_PROGRAM_BASE)) {
-    dbg_msg("user", "load failed");
-    vga_set_color(COLOR_WHITE, COLOR_RED);
-    vga_puts("Error: Failed to load file into memory\n");
-    vga_reset_color();
-    return false;
-  }
-
-  // 5. 执行用户程序
+  // 4. 执行用户程序
   vga_set_color(COLOR_GREEN, COLOR_BLACK);
-  dbg_kv("user", "launch", USER_PROGRAM_BASE);
+  dbg_msg("user", "launching user program");
   vga_reset_color();
 
-  run_user_program_at(USER_PROGRAM_BASE);
+  run_user_program_at(entry_point);
   
-  // 用户程序执行完后回到这里（如果采用了 call 而非 jmp）
+  // 用户程序执行完后回到这里
   vga_set_color(COLOR_YELLOW, COLOR_BLACK);
   dbg_msg("user", "program returned");
   vga_reset_color();
@@ -548,19 +546,31 @@ void handle_command(char *cmd)
     vga_puts("Switching to Ring 3...\n");
 
     // 静态数组存放硬编码机器码
-    static uint8_t user_program[32];
+    static uint8_t user_program[40];
 
-    user_program[0] = 0xB8; 
-    *(uint32_t*)&user_program[1] = 1;                  // mov eax, 1
+    user_program[0] = 0xB8;
+    *(uint32_t*)&user_program[1] = SYS_WRITE;            // mov eax, SYS_WRITE
 
-    user_program[5] = 0xBB; 
-    *(uint32_t*)&user_program[6] = (uint32_t)user_msg;    // mov ebx, &user_msg
+    user_program[5] = 0xBB;
+    *(uint32_t*)&user_program[6] = 1;                    // mov ebx, 1
 
-    user_program[10] = 0xCD; 
-    user_program[11] = 0x80;                           // int 0x80
+    user_program[10] = 0xB9;
+    *(uint32_t*)&user_program[11] = (uint32_t)user_msg;   // mov ecx, &user_msg
 
-    user_program[12] = 0xEB; 
-    user_program[13] = 0xFE;                           // jmp $
+    user_program[15] = 0xBA;
+    *(uint32_t*)&user_program[16] = 27;                   // mov edx, 27
+
+    user_program[20] = 0xCD;
+    user_program[21] = 0x80;                             // int 0x80
+
+    user_program[22] = 0xB8;
+    *(uint32_t*)&user_program[23] = SYS_EXIT;            // mov eax, SYS_EXIT
+
+    user_program[27] = 0xBB;
+    *(uint32_t*)&user_program[28] = 0;                   // mov ebx, 0
+
+    user_program[32] = 0xCD;
+    user_program[33] = 0x80;                             // int 0x80
 
     vga_puts("Launching program with syscall support...\n");
     run_user_program_at((uint32_t)user_program);
@@ -645,9 +655,7 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
   idt_init();
   dbg_msg("boot", "idt initialized");
   memory_init(mb_magic, mb_info_addr);
-  serial_puts("--- Kernel Booting ---\n");
-  __asm__ __volatile__("sti");
-  dbg_msg("boot", "interrupts enabled");
+  dbg_msg("boot", "kernel booting");
 
 
   /* * 1. 使用独立的、且强制 8 字节对齐的缓冲区
@@ -667,7 +675,6 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
     fs_init((struct ext2_superblock *)sb_buffer); // 3. 传入你的 fs_init 算大小 
     dbg_kv("fs", "superblock_block_size", 1024 << sb->s_log_block_size);
     dbg_kv("fs", "first_data_block", sb->s_first_data_block);
-    dbg_kv("fs", "inodes_per_group", sb->s_inodes_per_group);
     dbg_kv("fs", "runtime_block_size", g_block_size);
     //serial_puts("DEBUG: Dumping raw disk sectors from LBA 2...\n");
     //uint8_t dump_buf[512];
@@ -694,13 +701,11 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
     dbg_kv("fs", "fs_gdt_addr", (uint32_t)&fs_gdt);
     dbg_kv("fs", "fs_gdt_value", (uint32_t)fs_gdt);
     dbg_kv("fs", "gdt0_inode_table", fs_gdt[0].bg_inode_table);
-    dbg_msg("fs", "validating gdt[0]");
 
     if (fs_gdt[0].bg_inode_table == 0 || fs_gdt[0].bg_inode_table > 0x10000) {
       dbg_msg("fs", "fatal: gdt corrupted or wrong buffer offset");
       while(1);
     }
-    dbg_msg("fs", "gdt validation done");
 
     // 4. 读取根目录 Inode
     struct ext2_inode root_inode;
@@ -715,6 +720,8 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
 
       //      __asm__ volatile("sti");   // ⭐ 最后一步
 
+      dbg_msg("boot", "interrupts enabled");
+      __asm__ __volatile__("sti");
       run_shell();
     } else {
       dbg_kv("fs", "root_inode_mode", root_inode.i_mode);

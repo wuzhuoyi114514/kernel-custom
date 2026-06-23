@@ -12,7 +12,7 @@ LDFLAGS = -m elf_i386 -nostdlib
 BUILD_DIR = build
 
 # 目标文件
-OBJ = $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/arch/serial.o $(BUILD_DIR)/arch/disk.o $(BUILD_DIR)/fs/disk_io.o $(BUILD_DIR)/arch/io.o $(BUILD_DIR)/fs/inode.o $(BUILD_DIR)/arch/ata.o $(BUILD_DIR)/arch/keyboard.o $(BUILD_DIR)/arch/idt.o $(BUILD_DIR)/arch/gdt_flush.o $(BUILD_DIR)/arch/vga.o $(BUILD_DIR)/arch/ext2_ls.o $(BUILD_DIR)/arch/ext2_cd.o $(BUILD_DIR)/arch/ext2_lookup.o $(BUILD_DIR)/arch/ext2_cat.o $(BUILD_DIR)/arch/path.o $(BUILD_DIR)/arch/load.o $(BUILD_DIR)/arch/panic.o $(BUILD_DIR)/arch/memory.o
+OBJ = $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/arch/serial.o $(BUILD_DIR)/arch/disk.o $(BUILD_DIR)/fs/disk_io.o $(BUILD_DIR)/arch/io.o $(BUILD_DIR)/fs/inode.o $(BUILD_DIR)/arch/ata.o $(BUILD_DIR)/arch/keyboard.o $(BUILD_DIR)/arch/idt.o $(BUILD_DIR)/arch/gdt_flush.o $(BUILD_DIR)/arch/vga.o $(BUILD_DIR)/arch/ext2_ls.o $(BUILD_DIR)/arch/ext2_cd.o $(BUILD_DIR)/arch/ext2_lookup.o $(BUILD_DIR)/arch/ext2_cat.o $(BUILD_DIR)/arch/path.o $(BUILD_DIR)/arch/load.o $(BUILD_DIR)/arch/elf.o $(BUILD_DIR)/arch/panic.o $(BUILD_DIR)/arch/memory.o
 
 all: $(BUILD_DIR)/my_kernel.bin
 
@@ -37,7 +37,7 @@ $(BUILD_DIR)/my_kernel.bin: $(OBJ) linker.ld
 
 # 运行命令
 run: all
-	qemu-system-i386 -hda a.img -kernel $(BUILD_DIR)/my_kernel.bin -serial stdio
+	qemu-system-i386 -hda a.img -kernel $(BUILD_DIR)/my_kernel.bin -serial stdio -d int,mmu -D qemu_debug.log
 
 clean:
 	rm -rf $(BUILD_DIR) *.o *.bin arch/*.o fs/*.o

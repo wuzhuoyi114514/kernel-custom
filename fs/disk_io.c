@@ -35,7 +35,6 @@ struct mbr_sector {
 
 // ==================== 【核心新增 2】: 动态探测分区函数 ====================
 void probe_ext2_partition(void) {
-    dbg_msg("fs", "probing ext2 partition");
     uint8_t mbr_buffer[512];
     
     // 读取磁盘第一个物理扇区 (LBA 0)
@@ -62,7 +61,6 @@ void probe_ext2_partition(void) {
  * 初始化块大小 (从超级块读取)
  */
 void fs_init(struct ext2_superblock *sb) {
-    dbg_msg("fs", "initializing ext2 metadata");
     // Ext2 块大小计算公式: 1024 << s_log_block_size
     g_block_size = 1024 << sb->s_log_block_size;
 
@@ -77,7 +75,6 @@ void fs_init(struct ext2_superblock *sb) {
     
     dbg_kv("fs", "block_size", g_block_size);
     dbg_kv("fs", "inode_size", g_inode_size);
-    dbg_kv("fs", "inodes_per_block", g_inodes_per_block);
 }
 
 
@@ -95,9 +92,6 @@ void read_fs_block(uint32_t block_id, uint8_t *buf)
     }
     uint32_t sectors = g_block_size / 512;
     uint32_t lba = block_id * sectors;
-    dbg_kv("fs", "block_id", block_id);
-    dbg_kv("fs", "sectors_per_block", sectors);
-    dbg_kv("fs", "absolute_lba", ext2_start_lba + lba);
 
     // ==================== 【核心修改 3】：全面解开硬编码 ====================
     // 不管 Ext2 内部怎么算 LBA，丢给底层磁盘驱动时，强制叠加上分区的起始绝对 LBA！
