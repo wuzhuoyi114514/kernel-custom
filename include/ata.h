@@ -26,6 +26,7 @@
 #define ATA_SR_BSY  0x80
 #define ATA_SR_DRQ  0x08
 #define ATA_SR_ERR  0x01
+#define ATA_SR_DRDY 0x40
 
 /* =========================
  * Device Selection

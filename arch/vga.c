@@ -144,3 +144,10 @@ void vga_puts(const char* str) {
         i++;
     }
 }
+
+void vga_print_hex(uint32_t val) {
+    char hex_chars[] = "0123456789ABCDEF";
+    for (int i = 28; i >= 0; i -= 4) {
+        vga_putc(hex_chars[(val >> i) & 0xF]);
+    }
+}

@@ -13,9 +13,11 @@ inb:
 
 global insw
 insw:
-    mov dx, [esp+4]    ; 端口
-    mov edi, [esp+8]   ; 缓冲区
-    mov ecx, [esp+12]  ; 总字数
+    push edi           ; 保存 edi (cdecl callee-saved)
+    mov dx, [esp+8]    ; 端口
+    mov edi, [esp+12]  ; 缓冲区
+    mov ecx, [esp+16]  ; 总字数
     rep insw           ; 将端口数据循环存入 edi 指向的内存
+    pop edi            ; 恢复 edi
     ret
     

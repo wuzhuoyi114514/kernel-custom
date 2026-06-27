@@ -8,6 +8,7 @@ align 4
 section .text
 global _start
 extern kmain             ; 声明 C 语言的入口函数
+extern run_shell         ; 声明 C 语言的 shell 入口函数
 
 _start:
     ; 1. 关中断，防止在初始化过程中被打断
@@ -28,6 +29,7 @@ _start:
     jmp .loop
 
 section .bss
+global stack_top
 ; 3. 分配内核栈空间
 align 16                 ; 16 字节对齐
 stack_bottom:
@@ -58,7 +60,14 @@ keyboard_handler_asm:
     pop ds
     
     popa                ; 6. 恢复通用寄存器
-    iret                ; 7. 中断返回
+
+    ; 7. 发送 EOI（End of Interrupt）给主 PIC
+    ; 这一步至关重要！不发 EOI，PIC 的 ISR 寄存器中 IRQ1 位永远不清零，
+    ; 导致主 PIC 屏蔽后续所有中断（包括键盘），造成"敲键盘无响应"的 Bug。
+    mov al, 0x20
+    out 0x20, al
+
+    iret                ; 8. 中断返回
     ; 确保导出符号
 global syscall_handler_asm
 extern c_syscall_handler
@@ -105,7 +114,9 @@ page_fault_handler_asm:
     mov fs, ax
     mov gs, ax
 
+    push esp
     call page_fault_handler
+    add esp, 4
 
     pop gs
     pop fs
@@ -117,6 +128,7 @@ page_fault_handler_asm:
     iret
     global asm_switch_to_user
 extern g_user_kernel_esp
+extern shell_loop
 global user_exit_return_stub
 
 user_exit_return_stub:
@@ -125,8 +137,10 @@ user_exit_return_stub:
     mov es, ax
     mov fs, ax
     mov gs, ax
+    mov ss, ax
     mov esp, [g_user_kernel_esp]
-    ret
+    sti
+    jmp shell_loop   ; 跳回 shell 主循环，不重复打印欢迎语
 
 asm_switch_to_user:
     ; C 语言调用约定传递的参数：
@@ -153,3 +167,69 @@ asm_switch_to_user:
     push ecx            ; 用户态 EIP
 
     iret                ; 见证奇迹的降权切换！
+
+; ==================== 异常处理器 ====================
+; 无错误码的异常 (#DE=0, #NM=7, #DF=8)
+%macro ISR_NOERR 1
+global isr_%1
+extern generic_exception_handler
+isr_%1:
+    cli
+    pusha
+    push ds
+    push es
+    push fs
+    push gs
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    push esp
+    push %1
+    call generic_exception_handler
+    add esp, 8
+    pop gs
+    pop fs
+    pop es
+    pop ds
+    popa
+    iret
+%endmacro
+
+; 有错误码的异常 (#TS=10, #NP=11, #SS=12, #GP=13, #PF=14)
+%macro ISR_ERR 1
+global isr_%1
+extern generic_exception_handler
+isr_%1:
+    cli
+    pusha
+    push ds
+    push es
+    push fs
+    push gs
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    push esp
+    push %1
+    call generic_exception_handler
+    add esp, 8
+    pop gs
+    pop fs
+    pop es
+    pop ds
+    popa
+    add esp, 4
+    iret
+%endmacro
+
+ISR_NOERR 0    ; #DE - Divide Error
+ISR_NOERR 7    ; #NM - Device Not Available
+ISR_NOERR 8    ; #DF - Double Fault
+ISR_ERR   10   ; #TS - Invalid TSS
+ISR_ERR   11   ; #NP - Segment Not Present
+ISR_ERR   12   ; #SS - Stack-Segment Fault
+ISR_ERR   13   ; #GP - General Protection Fault

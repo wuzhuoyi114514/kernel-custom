@@ -16,7 +16,7 @@ void ext2_cd(const char *path) {
     serial_puts("\n");
 
     // 1. 查找目标 Inode
-    uint32_t target_inode = ext2_lookup(g_cwd_inode, path);
+    uint32_t target_inode = ext2_lookup(g_cwd_node.internal_id, path);
     if (target_inode == 0) {
         dbg_msg("cd", "target not found");
         vga_puts("cd: No such directory.\n");
@@ -55,8 +55,8 @@ void ext2_cd(const char *path) {
         }
     }
 
-    g_cwd_inode = target_inode; 
-    dbg_kv("cd", "cwd_inode", g_cwd_inode);
+    g_cwd_node.internal_id = target_inode; 
+    dbg_kv("cd", "cwd_inode", g_cwd_node.internal_id);
     serial_puts("[cd] cwd_path=");
     serial_puts(g_cwd_path);
     serial_puts("\n");

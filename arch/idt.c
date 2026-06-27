@@ -62,6 +62,13 @@ void idt_set_gate(unsigned char num, unsigned int base, unsigned short sel, unsi
 extern void keyboard_handler_asm(void);
 extern void syscall_handler_asm(void);
 extern void page_fault_handler_asm(void);
+extern void isr_0(void);
+extern void isr_7(void);
+extern void isr_8(void);
+extern void isr_10(void);
+extern void isr_11(void);
+extern void isr_12(void);
+extern void isr_13(void);
 
 // ==================== 5. 初始化函数 ====================
 void idt_init() {
@@ -82,6 +89,15 @@ void idt_init() {
     // 0xEE = 11101110b -> Present=1, DPL=3 (允许用户态调用), 32位中断门
     idt_set_gate(0x80, (unsigned int)syscall_handler_asm, 0x08, 0xEE);
     idt_set_gate(0x0E, (unsigned int)page_fault_handler_asm, 0x08, 0x8E);
+
+    // CPU 异常处理器
+    idt_set_gate(0x00, (unsigned int)isr_0,  0x08, 0x8E);  // #DE
+    idt_set_gate(0x07, (unsigned int)isr_7,  0x08, 0x8E);  // #NM
+    idt_set_gate(0x08, (unsigned int)isr_8,  0x08, 0x8E);  // #DF
+    idt_set_gate(0x0A, (unsigned int)isr_10, 0x08, 0x8E);  // #TS
+    idt_set_gate(0x0B, (unsigned int)isr_11, 0x08, 0x8E);  // #NP
+    idt_set_gate(0x0C, (unsigned int)isr_12, 0x08, 0x8E);  // #SS
+    idt_set_gate(0x0D, (unsigned int)isr_13, 0x08, 0x8E);  // #GP
     // ======================================================
 
     // 设置正确的 Limit 并用 lidt 加载

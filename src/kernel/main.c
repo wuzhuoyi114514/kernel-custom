@@ -16,6 +16,8 @@
 #include "gdt.h"
 #include "shell_api.h"
 #include "syscall.h"
+#include "vfs.h"
+#include "task.h"
 
 #define GDT_KERNEL_CODE 0x08
 #define GDT_KERNEL_DATA 0x10
@@ -24,6 +26,31 @@
 #define GDT_TSS         0x28  // TSS 的选择子
 #define SHELL_BUF_SIZE 256
 #define MAX_HISTORY 30  // 最多保存 30 条历史记录
+
+char g_init_path[128] = "./shell.elf";
+
+static void parse_init_cmdline(uint32_t mb_info_addr) {
+    struct multiboot_info *mb = (struct multiboot_info *)mb_info_addr;
+    if (!(mb->flags & (1 << 2)) || mb->cmdline == 0) return;
+    const char *cmdline = (const char *)mb->cmdline;
+    const char *prefix = "init=";
+    for (const char *p = cmdline; *p; p++) {
+        int match = 1;
+        for (int i = 0; prefix[i]; i++) {
+            if (p[i] != prefix[i]) { match = 0; break; }
+        }
+        if (match) {
+            const char *val = p + 5;
+            int i = 0;
+            while (val[i] && val[i] != ' ' && i < 127) {
+                g_init_path[i] = val[i];
+                i++;
+            }
+            g_init_path[i] = '\0';
+            return;
+        }
+    }
+}
 
 static char g_history[MAX_HISTORY][SHELL_BUF_SIZE]; // 现在这里绝对合法了！
 static int g_history_count = 0;
@@ -61,11 +88,9 @@ struct gdt_entry gdt[6];
 struct gdt_ptr gp;
 struct tss_entry tss;
 uint32_t g_user_kernel_esp = 0;
+uint32_t g_mb_info_addr = 0;
 
 char g_cwd_path[128] = "/";
-
-#define GDT_KERNEL_CODE 0x08
-#define GDT_KERNEL_DATA 0x10
 
 static void gdt_set_gate(int num, uint32_t base, uint32_t limit,
     uint8_t access, uint8_t gran)
@@ -121,6 +146,49 @@ void gdt_init()
 void handle_command(char *cmd);
 void shell_backspace(int *pos);
 extern void user_exit_return_stub(void);
+
+void generic_exception_handler(uint32_t vector, uint32_t esp) {
+    uint32_t *stack = (uint32_t *)esp;
+    uint32_t eip = stack[13]; // eip position in pushed stack
+    uint32_t error_code = (vector >= 10 && vector <= 14) ? stack[14] : 0;
+
+    (void)error_code;
+
+    const char *names[] = {
+        "#DE Divide Error", "", "", "", "", "", "", "",
+        "#NM Device Not Available", "", "#DF Double Fault",
+        "", "#TS Invalid TSS", "#NP Segment Not Present",
+        "#SS Stack-Segment Fault", "#GP General Protection Fault",
+        "#PF Page Fault"
+    };
+    const char *name = (vector < 17) ? names[vector] : "Unknown Exception";
+
+    vga_set_color(COLOR_WHITE, COLOR_RED);
+    vga_puts("\n!!! KERNEL EXCEPTION !!!\n");
+    vga_puts("Exception: ");
+    vga_puts(name);
+    vga_puts("\nVector: ");
+    print_hex(vector);
+    vga_puts("\nEIP: ");
+    print_hex(eip);
+    vga_puts("\n");
+    vga_reset_color();
+
+    dbg_kv("exception", "vector", vector);
+    dbg_kv("exception", "eip", eip);
+    dbg_kv("exception", "error", error_code);
+
+    __asm__ __volatile__("cli; hlt");
+    while(1);
+}
+
+/* Flag set by schedule() to request shell state reset after program exit */
+static int g_shell_needs_reset = 0;
+
+void shell_reset(void)
+{
+    g_shell_needs_reset = 1;
+}
 
 // --- 简单的显示驱动 ---
 
@@ -185,10 +253,39 @@ void c_syscall_handler(struct syscall_regs *regs) {
               break;
             }
     case SYS_EXIT: {
-              dbg_kv("syscall", "exit_status", regs->ebx);
-              regs->eax = regs->ebx;
-              regs->eip = (uint32_t)user_exit_return_stub;
-              regs->cs = GDT_KERNEL_CODE;
+                // Exit current task and schedule next one
+                task_exit(regs->ebx);
+                schedule();
+              __builtin_unreachable();
+            }
+    case SYS_READ_RAW: {
+              extern char keyboard_buffer_pop(void);
+              char c;
+              do {
+                c = keyboard_buffer_pop();
+                if (c == 0) __asm__ __volatile__("hlt");
+              } while (c == 0);
+              regs->eax = (uint32_t)(unsigned char)c;
+              break;
+            }
+    case SYS_READ: {
+              extern char keyboard_buffer_pop(void);
+              char *buf = (char *)regs->ecx;
+              uint32_t max_len = regs->edx;
+              uint32_t count = 0;
+              while (count < max_len) {
+                char c;
+                do {
+                  c = keyboard_buffer_pop();
+                  if (c == 0) __asm__ __volatile__("hlt");
+                } while (c == 0);
+                if (c == '\n') {
+                  buf[count++] = '\n';
+                  break;
+                }
+                buf[count++] = c;
+              }
+              regs->eax = count;
               break;
             }
     default:
@@ -197,40 +294,6 @@ void c_syscall_handler(struct syscall_regs *regs) {
             break;
   }
 }
-
-int strlen(const char *str) {
-  int len = 0;
-  while (str[len] != '\0') len++;
-  return len;
-}
-
-char* strcpy(char *dest, const char *src) {
-  char *d = dest;
-  while ((*d++ = *src++));
-  return dest;
-}
-
-int strncmp(const char *a, const char *b, uint32_t n)
-{
-  while (n && *a && (*a == *b)) {
-    a++;
-    b++;
-    n--;
-  }
-  if (n == 0) return 0;
-  return *(unsigned char*)a - *(unsigned char*)b;
-}
-
-int strcmp(const char *a, const char *b)
-{
-  while (*a && (*a == *b)) {
-    a++;
-    b++;
-  }
-  return *(unsigned char*)a - *(unsigned char*)b;
-}
-
-
 
 void print_hex(uint32_t val) {
   // 11个字节的纯局部栈空间：'0', 'x', 8个十六进制符, '\0'
@@ -259,26 +322,46 @@ void shell_backspace(int *pos)
 
   serial_puts("\b \b"); // 覆盖字符
 }
+// shell 主循环，SYS_EXIT 后直接跳回这里，避免重复打印欢迎语
+void shell_loop(void);
+
 void run_shell()
 {
-  char input_buffer[SHELL_BUF_SIZE];
-  int pos = 0;
-  int len = 0; // 当前输入的字符串总长度
-               //
-               // 1. 统一使用 vga_puts 输出欢迎语和初始提示符
+  // 欢迎语只在内核首次启动时打印一次
   vga_set_color(COLOR_YELLOW, COLOR_BLACK);
   vga_puts("Welcome to Kernel Shell \n");
+
+  // 打印初始提示符
   vga_set_color(COLOR_GREEN, COLOR_BLACK);
-  vga_puts("Kernel:"); 
-
-  // [/] 路径显示为优雅的青色
+  vga_puts("Kernel:");
   vga_set_color(COLOR_LIGHT_CYAN, COLOR_BLACK);
-  vga_puts("/"); 
-
-  // [> ] 符号切回纯白色，等待用户敲击
+  vga_puts("/");
   vga_set_color(COLOR_WHITE, COLOR_BLACK);
   vga_puts("> ");
 
+  shell_loop();
+}
+
+void shell_loop(void)
+{
+  // 注意：这些变量是静态的，用户程序 exit 后重入 shell_loop 时状态保留
+  static char input_buffer[SHELL_BUF_SIZE];
+  static int pos = 0;
+  static int len = 0;
+
+  if (g_shell_needs_reset) {
+    g_shell_needs_reset = 0;
+    pos = 0;
+    len = 0;
+    for (int i = 0; i < SHELL_BUF_SIZE; i++) input_buffer[i] = '\0';
+    vga_puts("\n");
+    vga_set_color(COLOR_GREEN, COLOR_BLACK);
+    vga_puts("Kernel:");
+    vga_set_color(COLOR_LIGHT_CYAN, COLOR_BLACK);
+    vga_puts(g_cwd_path);
+    vga_set_color(COLOR_WHITE, COLOR_BLACK);
+    vga_puts("> ");
+  }
 
   while (1)
   {
@@ -446,6 +529,7 @@ void run_user_program_at(uint32_t entry_point) {
   uint32_t current_kernel_esp;
   __asm__ __volatile__("mov %%esp, %0" : "=r"(current_kernel_esp));
   tss.esp0 = current_kernel_esp; 
+  g_user_kernel_esp = current_kernel_esp;
 
   // 调用纯汇编函数，彻底告别递归和 GCC 内联优化背刺
   asm_switch_to_user(entry_point, user_stack_top);
@@ -519,17 +603,16 @@ bool run_user_program_from_file(const char *filepath) {
   dbg_msg("user", "launching user program");
   vga_reset_color();
 
-  run_user_program_at(entry_point);
+  // 使用任务系统创建并运行
+  task_create(entry_point, USER_STACK_TOP);
   
-  // 用户程序执行完后回到这里
+  // 当用户程序通过 sys_exit 结束后会返回这里
   vga_set_color(COLOR_YELLOW, COLOR_BLACK);
   dbg_msg("user", "program returned");
   vga_reset_color();
   
   return true;
 }
-
-static uint8_t user_code_test[] = { 0xB0, 'A', 0xB4, 0x0E, 0xEB, 0xFC };
 
 void handle_command(char *cmd)
 {
@@ -641,13 +724,16 @@ void handle_command(char *cmd)
 // 定义一个足够大的全局缓冲区，防止栈溢出
 // 定义独立缓冲区，彻底隔离元数据
 void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
-  dbg_msg("boot", "kmain entry");
-  dbg_kv("boot", "mb_magic", mb_magic);
-  dbg_kv("boot", "mb_info", mb_info_addr);
-   *(uint16_t*)0xB8000 = 0x4F41; 
-  if (!ata_init()) {
+    dbg_msg("boot", "kmain entry");
+    dbg_kv("boot", "mb_magic", mb_magic);
+    dbg_kv("boot", "mb_info", mb_info_addr);
+    *(uint16_t*)0xB8000 = 0x4F41; 
+    if (!ata_init()) {
         panic("ATA subsystem failed to initialize.");
     }
+    // Save multiboot info address for init parameter parsing
+    g_mb_info_addr = mb_info_addr;
+    parse_init_cmdline(mb_info_addr);
   serial_init();
   clear_screen();
   gdt_init();
@@ -714,15 +800,15 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_addr) {
     // 5. 严谨的目录类型判定
     if ((root_inode.i_mode & 0xF000) == 0x4000) {
       dbg_msg("fs", "root inode is a directory");
-      //最后一步
 
-      // 填 ISR 表！！！
-
-      //      __asm__ volatile("sti");   // ⭐ 最后一步
+      extern void vfs_init(void);
+      vfs_init();
+      dbg_msg("fs", "vfs initialized");
 
       dbg_msg("boot", "interrupts enabled");
       __asm__ __volatile__("sti");
-      run_shell();
+      extern void auto_enter_user_mode(void);
+      auto_enter_user_mode();
     } else {
       dbg_kv("fs", "root_inode_mode", root_inode.i_mode);
       panic("Filesystem Error");

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 #include "../include/ata.h"
 #include "../include/debug.h"
 #include "../include/io.h"
@@ -22,24 +23,27 @@ bool ata_init(void) {
         return false;
     }
 
-    // 3. 探测设备 (选择主盘 0xA0)
-    outb(ATA_REG_DEVICE, 0xA0);
-    for (volatile int i = 0; i < 1000; i++); // 等待设备选择稳定
+    // 3. 探测设备 (选择主盘，使用 LBA 模式)
+    outb(ATA_REG_DEVICE, ATA_MASTER);
+    for (volatile int i = 0; i < 10000; i++); // 等待设备选择稳定
 
-    uint8_t status = inb(ATA_REG_STATUS);
-    if (status == 0xFF) {
-        dbg_msg("ata", "no device detected (bus floating)");
-        return false;
-    }
-    // 如果没有盘，DRDY 永远不会变高
-    if (status == 0xFF || !(status & 0x40)) {
-        dbg_msg("ata", "no device detected or drive not ready");
-        return false; 
-    }
+    // 4. 轮询 DRDY，给设备足够时间就绪
+    uint32_t poll = 100000;
+    uint8_t status;
+    do {
+        status = inb(ATA_REG_STATUS);
+        if (status == 0xFF) {
+            dbg_msg("ata", "no device detected (bus floating)");
+            return false;
+        }
+        if (status & ATA_SR_ERR) {
+            dbg_msg("ata", "device reported error during init");
+            return false;
+        }
+    } while (!(status & ATA_SR_DRDY) && poll--);
 
-    // 如果状态寄存器显示有错误位 (ERR, 位 0)
-    if (status & 0x01) {
-        dbg_msg("ata", "device reported error during init");
+    if (poll == 0) {
+        dbg_msg("ata", "drive not ready (DRDY timeout)");
         return false;
     }
 

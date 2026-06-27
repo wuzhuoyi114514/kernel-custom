@@ -43,6 +43,12 @@ uint32_t pmm_alloc_frame(void);
 void pmm_free_frame(uint32_t phys_addr);
 void paging_mark_user_range(uint32_t phys_addr, size_t size);
 
+void *pmm_alloc_page(void);
+uint32_t page_get_phys(uint32_t *pd, uint32_t vaddr);
+void page_map(uint32_t *pd, uint32_t vaddr, uint32_t paddr, uint32_t flags);
+
+extern uint32_t *kernel_pd;
+
 void *memset(void *dst, int c, size_t n);
 void *memcpy(void *dst, const void *src, size_t n);
 void *memmove(void *dst, const void *src, size_t n);

@@ -21,11 +21,12 @@
 
 #include <stdint.h>
 
-void update_hardware_cursor(void);
+void vga_update_cursor(void);
 void clear_screen(void);
 void vga_puts(const char* str);
 void vga_putc(char c);
 void vga_set_color(uint8_t fg, uint8_t bg);
 void vga_reset_color(void);
+void vga_print_hex(uint32_t val);
 
 #endif

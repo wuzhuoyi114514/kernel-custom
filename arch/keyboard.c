@@ -1,9 +1,8 @@
 #include <stdint.h>
 #include "../include/debug.h"
 #include "../include/io.h"
-extern void serial_putc(char c); 
+extern void serial_putc(char c);
 
-// 1. 正常未按下 Shift 的映射表
 static const char scan_code_map_normal[128] = {
     0,  0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
     '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
@@ -13,7 +12,6 @@ static const char scan_code_map_normal[128] = {
     '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.'
 };
 
-// 2. 按下 Shift 之后的映射表
 static const char scan_code_map_shift[128] = {
     0,  0, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b',
     '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',
@@ -23,11 +21,15 @@ static const char scan_code_map_shift[128] = {
     '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.'
 };
 
-// 状态机变量
-static int g_shift_pressed = 0;
-static int g_is_e0 = 0; 
+static int g_lshift_down = 0;
+static int g_rshift_down = 0;
+static int g_lctrl_down = 0;
+static int g_rctrl_down = 0;
+static int g_lalt_down = 0;
+static int g_ralt_down = 0;
+static int g_is_e0 = 0;
+static int g_key_down[128] = {0};
 
-// 环形缓冲区
 #define KBD_BUF_SIZE 128
 static volatile int head = 0;
 static volatile int tail = 0;
@@ -48,52 +50,57 @@ char keyboard_buffer_pop(void) {
     return c;
 }
 
-// 中断服务程序
 void keyboard_handler(void) {
     uint8_t status = inb(0x64);
-    if (status & 0x01) { 
+    if (status & 0x01) {
         uint8_t scancode = inb(0x60);
 
-        // 分支 1：处理 E0 前缀
         if (scancode == 0xE0) {
             g_is_e0 = 1;
-        } 
-        // 分支 2：处理紧跟在 E0 后面的方向键
+        }
         else if (g_is_e0) {
-            g_is_e0 = 0; // 重置状态
-            
-            if (scancode == 0x48) {        // 方向键【上】
-                keyboard_buffer_push(0x11); // 发射自定义的上键信号
-            } 
-            else if (scancode == 0x50) {   // 方向键【下】
-                keyboard_buffer_push(0x12); // 发射自定义的下键信号
-            }
-                else if (scancode == 0x4B) {   // 【新增】方向键【左】
-                keyboard_buffer_push(0x13); // 发射自定义的左键信号
-            }
-            else if (scancode == 0x4D) {   // 【新增】方向键【右】
-                keyboard_buffer_push(0x14); // 发射自定义的右键信号
-            }
-        } 
-        // 分支 3：普通的标准键与 Shift 状态机
+            g_is_e0 = 0;
+            if (scancode == 0x48) { keyboard_buffer_push(0x11); }
+            else if (scancode == 0x50) { keyboard_buffer_push(0x12); }
+            else if (scancode == 0x4B) { keyboard_buffer_push(0x13); }
+            else if (scancode == 0x4D) { keyboard_buffer_push(0x14); }
+            else if (scancode == 0x1D) { g_rctrl_down = 1; }
+            else if (scancode == 0x9D) { g_rctrl_down = 0; }
+            else if (scancode == 0x38) { g_ralt_down = 1; }
+            else if (scancode == 0xB8) { g_ralt_down = 0; }
+        }
         else {
-            if (scancode == 0x2A || scancode == 0x36) {
-                g_shift_pressed = 1;
-            } 
-            else if (scancode == 0xAA || scancode == 0xB6) {
-                g_shift_pressed = 0;
-            }
+            if (scancode == 0x2A) { g_lshift_down = 1; }
+            else if (scancode == 0x36) { g_rshift_down = 1; }
+            else if (scancode == 0xAA) { g_lshift_down = 0; }
+            else if (scancode == 0xB6) { g_rshift_down = 0; }
+            else if (scancode == 0x1D) { g_lctrl_down = 1; }
+            else if (scancode == 0x9D) { g_lctrl_down = 0; }
+            else if (scancode == 0x38) { g_lalt_down = 1; }
+            else if (scancode == 0xB8) { g_lalt_down = 0; }
             else if (scancode < 0x80) {
-                if (scancode < 128) {
-                    char c = g_shift_pressed ? scan_code_map_shift[scancode] : scan_code_map_normal[scancode];
+                if (!g_key_down[scancode]) {
+                    g_key_down[scancode] = 1;
+                    int shift = g_lshift_down || g_rshift_down;
+                    int ctrl = g_lctrl_down || g_rctrl_down;
+                    char c = shift ? scan_code_map_shift[scancode] : scan_code_map_normal[scancode];
+                    if (ctrl && c >= 'a' && c <= 'z') {
+                        c = c - 'a' + 1;
+                    } else if (ctrl && c >= 'A' && c <= 'Z') {
+                        c = c - 'A' + 1;
+                    }
                     if (c != 0) {
                         keyboard_buffer_push(c);
                     }
                 }
+            } else {
+                int key = scancode - 0x80;
+                if (key < 128) {
+                    g_key_down[key] = 0;
+                }
             }
         }
-    } // 这里闭合 if (status & 0x01)
+    }
 
-    // 发送 EOI，必须在键盘处理函数体内！
     outb(0x20, 0x20);
-} // 这里完美闭合 keyboard_handler
+}

@@ -30,33 +30,32 @@ static bool validate_segment(uint32_t vaddr, uint32_t memsz) {
     return true;
 }
 
-bool load_elf_program_from_inode(uint32_t inode_num, uint32_t *entry_point_out) {
-    if (entry_point_out == 0) {
+#include "vfs.h"
+
+bool load_elf_program_from_vfs(vfs_node_t *node, uint32_t *entry_point_out) {
+    if (entry_point_out == 0 || node == 0) {
         return false;
     }
 
-    dbg_kv("elf", "inode", inode_num);
+    dbg_kv("elf", "vfs_id", node->internal_id);
 
-    struct ext2_inode inode;
-    read_inode(inode_num, g_sb, fs_gdt, &inode);
-
-    if ((inode.i_mode & EXT2_S_IFMT) != 0x8000) {
+    if (node->type != VFS_TYPE_FILE) {
         dbg_msg("elf", "target is not a regular file");
         return false;
     }
 
-    if (inode.i_size < sizeof(struct elf32_ehdr)) {
+    if (node->size < sizeof(struct elf32_ehdr)) {
         dbg_msg("elf", "file too small");
         return false;
     }
 
-    uint8_t *image = (uint8_t *)kmalloc(inode.i_size);
+    uint8_t *image = (uint8_t *)kmalloc(node->size);
     if (image == 0) {
         dbg_msg("elf", "kmalloc failed");
         return false;
     }
 
-    if (!load_file_to_memory(inode_num, image)) {
+    if (!vfs_read(node, 0, node->size, image)) {
         dbg_msg("elf", "file load failed");
         kfree(image);
         return false;
@@ -92,7 +91,7 @@ bool load_elf_program_from_inode(uint32_t inode_num, uint32_t *entry_point_out) 
     }
 
     uint32_t ph_end = ehdr->e_phoff + (uint32_t)ehdr->e_phnum * sizeof(struct elf32_phdr);
-    if (ph_end < ehdr->e_phoff || ph_end > inode.i_size) {
+    if (ph_end < ehdr->e_phoff || ph_end > node->size) {
         dbg_msg("elf", "invalid phdr table");
         kfree(image);
         return false;
@@ -110,7 +109,7 @@ bool load_elf_program_from_inode(uint32_t inode_num, uint32_t *entry_point_out) 
             kfree(image);
             return false;
         }
-        if (phdr->p_offset + phdr->p_filesz > inode.i_size) {
+        if (phdr->p_offset + phdr->p_filesz > node->size) {
             dbg_msg("elf", "segment outside file");
             kfree(image);
             return false;

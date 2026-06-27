@@ -1,5 +1,6 @@
 #include "../include/memory.h"
 #include "../include/debug.h"
+#include "../include/vga.h"
 
 #define PAGE_SIZE              4096u
 #define PAGE_PRESENT           0x001u
@@ -161,7 +162,7 @@ static void identity_map_page(uint32_t phys_addr, uint32_t flags) {
     uint32_t pte = (phys_addr >> 12) & 0x3FFu;
     uint32_t table_phys = (uint32_t)&g_page_tables[pde][0];
 
-    g_page_directory[pde] = table_phys | PAGE_PRESENT | PAGE_WRITE | (flags & PAGE_USER);
+    g_page_directory[pde] |= table_phys | PAGE_PRESENT | PAGE_WRITE | (flags & PAGE_USER);
     g_page_tables[pde][pte] = (phys_addr & 0xFFFFF000u) | PAGE_PRESENT | (flags & (PAGE_WRITE | PAGE_USER));
 }
 
@@ -191,16 +192,70 @@ static void enable_paging(void) {
     __asm__ __volatile__("mov %0, %%cr0" : : "r"(cr0));
 }
 
+struct page_fault_frame {
+    uint32_t gs, fs, es, ds;
+    uint32_t edi, esi, ebp, orig_esp, ebx, edx, ecx, eax;
+    uint32_t error_code;
+    uint32_t eip, cs, eflags;
+    uint32_t user_esp, user_ss;
+};
+
+extern void user_exit_return_stub(void);
+extern void print_hex(uint32_t val);
+
 static uint32_t read_cr2(void) {
     uint32_t value;
     __asm__ __volatile__("mov %%cr2, %0" : "=r"(value));
     return value;
 }
 
-void page_fault_handler(void) {
-    dbg_kv("mm", "page_fault_addr", read_cr2());
-    panic("Page fault");
-    while (1) {
+void page_fault_handler(struct page_fault_frame *frame) {
+    uint32_t cr2 = read_cr2();
+    uint32_t err = frame->error_code;
+
+    dbg_kv("mm", "cr2", cr2);
+    dbg_kv("mm", "eip", frame->eip);
+    dbg_kv("mm", "err", err);
+
+    if (err & 4) {
+        vga_set_color(COLOR_WHITE, COLOR_RED);
+        vga_puts("\nProgram crashed: page fault at 0x");
+        print_hex(cr2);
+        vga_puts(", eip=0x");
+        print_hex(frame->eip);
+        vga_puts("\n");
+        vga_reset_color();
+
+        dbg_msg("mm", "user page fault, returning to kernel");
+        extern uint32_t g_user_kernel_esp;
+        extern void run_shell(void);
+        __asm__ __volatile__(
+            "mov $0x10, %%ax  \n"
+            "mov %%ax, %%ds   \n"
+            "mov %%ax, %%es   \n"
+            "mov %%ax, %%fs   \n"
+            "mov %%ax, %%gs   \n"
+            "mov %%ax, %%ss   \n"
+            "mov %0,   %%esp  \n"
+            "sti               \n"
+            "jmp *%1          \n"
+            :
+            : "r"(g_user_kernel_esp), "r"((uint32_t)run_shell)
+            : "memory"
+        );
+        __builtin_unreachable();
+    } else {
+        vga_set_color(COLOR_WHITE, COLOR_RED);
+        vga_puts("\nKernel page fault at 0x");
+        print_hex(cr2);
+        vga_puts(", eip=0x");
+        print_hex(frame->eip);
+        vga_puts("\n");
+        vga_reset_color();
+
+        dbg_msg("mm", "kernel page fault, halting");
+        __asm__ __volatile__("cli; hlt");
+        while (1);
     }
 }
 
@@ -513,3 +568,33 @@ int memcmp(const void *a, const void *b, size_t n) {
 
     return 0;
 }
+
+void *pmm_alloc_page(void) {
+    return (void*)pmm_alloc_frame();
+}
+
+uint32_t page_get_phys(uint32_t *pd, uint32_t vaddr) {
+    uint32_t pde = vaddr >> 22;
+    uint32_t pte = (vaddr >> 12) & 0x3FF;
+    if (!(pd[pde] & PAGE_PRESENT)) return 0;
+    uint32_t *pt = (uint32_t*)(pd[pde] & 0xFFFFF000);
+    if (!(pt[pte] & PAGE_PRESENT)) return 0;
+    return (pt[pte] & 0xFFFFF000) | (vaddr & 0xFFF);
+}
+
+void page_map(uint32_t *pd, uint32_t vaddr, uint32_t paddr, uint32_t flags) {
+    uint32_t pde = vaddr >> 22;
+    uint32_t pte = (vaddr >> 12) & 0x3FF;
+    
+    if (!(pd[pde] & PAGE_PRESENT)) {
+        uint32_t pt_phys = pmm_alloc_frame();
+        if (!pt_phys) return;
+        uint32_t *pt = (uint32_t*)pt_phys;
+        memset(pt, 0, 4096);
+        pd[pde] = pt_phys | flags | PAGE_PRESENT;
+    }
+    uint32_t *pt = (uint32_t*)(pd[pde] & 0xFFFFF000);
+    pt[pte] = (paddr & 0xFFFFF000) | flags | PAGE_PRESENT;
+}
+
+uint32_t *kernel_pd = g_page_directory;
